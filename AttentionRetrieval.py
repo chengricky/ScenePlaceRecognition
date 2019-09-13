@@ -11,7 +11,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import SubsetRandomSampler
-from torch.utils.data.dataset import Subset
+
 from datetime import datetime
 
 import h5py
@@ -75,218 +75,11 @@ parser.add_argument('--vladv2', action='store_true', help='whether to use VLADv2
 parser.add_argument('--reduction', action='store_true', help='whether to perform PCA dimension reduction.')
 
 
-def train(epoch):
-    epoch_loss = 0
-    startIter = 1  # keep track of batch iter across subsets for logging
-
-    if opt.cacheRefreshRate > 0:
-        subsetN = ceil(len(train_set) / opt.cacheRefreshRate)
-        # TODO randomise the arange before splitting?
-        subsetIdx = np.array_split(np.arange(len(train_set)), subsetN)
-    else:
-        subsetN = 1
-        subsetIdx = [np.arange(len(train_set))]
-
-    nBatches = (len(train_set) + opt.batchSize - 1) // opt.batchSize
-
-    for subIter in range(subsetN):
-        print('====> Building Cache, subIter =', subIter)
-        model.eval()
-        train_set.cache = join(opt.cachePath, train_set.whichSet + '_feat_cache.hdf5')
-        with h5py.File(train_set.cache, mode='w') as h5:
-            pool_size = encoder_dim
-            if opt.pooling.lower() == 'netvlad':
-                # if not opt.reduction:
-                pool_size *= opt.num_clusters
-                # else:
-                #     pool_size = 4096
-            h5feat = h5.create_dataset("features",
-                                       [len(whole_train_set), pool_size],
-                                       dtype=np.float32)
-            with torch.no_grad():
-                for iteration, (input, indices) in enumerate(whole_training_data_loader, 1):
-                    input = input.to(device)
-                    image_encoding = model.encoder(input)
-                    if opt.withAttention:
-                        image_encoding = model.attention(image_encoding)
-                        vlad_encoding = model.pool(image_encoding)
-                        del image_encoding
-                    else:
-                        vlad_encoding = model.pool(image_encoding)
-                        del image_encoding
-                    h5feat[indices.detach().numpy(), :] = vlad_encoding.detach().cpu().numpy()
-                    del input, vlad_encoding
-
-
-        sub_train_set = Subset(dataset=train_set, indices=subsetIdx[subIter])
-
-        training_data_loader = DataLoader(dataset=sub_train_set, num_workers=opt.threads,
-                                          batch_size=opt.batchSize, shuffle=True,
-                                          collate_fn=dataset.collate_fn, pin_memory=True)
-
-        print('Allocated:', torch.cuda.memory_allocated())
-        print('Cached:', torch.cuda.memory_cached())
-
-        model.train()
-        for iteration, (query, positives, negatives,
-                        negCounts, indices) in enumerate(training_data_loader, startIter):
-            #print('Start Iteration', iteration)
-            # some reshaping to put query, pos, negs in a single (N, 3, H, W) tensor
-            # where N = batchSize * (nQuery + nPos + nNeg)
-            if query is None:
-                #print('EMPTY QUERY', iteration)
-                continue  # in case we get an empty batch
-
-            B, C, H, W = query.shape
-            nNeg = torch.sum(negCounts)
-            input = torch.cat([query, positives, negatives])
-
-            input = input.to(device)
-            image_encoding = model.encoder(input)
-            if opt.withAttention:
-                image_encoding = model.attention(image_encoding)
-                vlad_encoding = model.pool(image_encoding)
-                del image_encoding
-            else:
-                vlad_encoding = model.pool(image_encoding)
-                del image_encoding
-
-            vladQ, vladP, vladN = torch.split(vlad_encoding, [B, B, nNeg])
-
-            optimizer.zero_grad()
-
-            # calculate loss for each Query, Positive, Negative triplet
-            # due to potential difference in number of negatives have to
-            # do it per query, per negative
-            loss = 0
-            for i, negCount in enumerate(negCounts):
-                for n in range(negCount):
-                    negIx = (torch.sum(negCounts[:i]) + n).item()
-                    loss += criterion(vladQ[i:i + 1], vladP[i:i + 1], vladN[negIx:negIx + 1])
-
-            loss /= nNeg.float().to(device)  # normalise by actual number of negatives
-            loss.backward()
-            optimizer.step()
-            del input, vlad_encoding, vladQ, vladP, vladN
-            del query, positives, negatives
-
-            batch_loss = loss.item()
-            epoch_loss += batch_loss
-
-            if iteration % 50 == 0 or nBatches <= 10:
-                print("==> Epoch[{}]({}/{}): Loss: {:.4f}".format(epoch, iteration,
-                                                                  nBatches, batch_loss), flush=True)
-                writer.add_scalar('Train/Loss', batch_loss,
-                                  ((epoch - 1) * nBatches) + iteration)
-                writer.add_scalar('Train/nNeg', nNeg,
-                                  ((epoch - 1) * nBatches) + iteration)
-                print('Allocated:', torch.cuda.memory_allocated())
-                print('Cached:', torch.cuda.memory_cached())
-
-        startIter += len(training_data_loader)
-        del training_data_loader, loss
-        optimizer.zero_grad()
-        torch.cuda.empty_cache()
-        remove(train_set.cache)  # delete HDF5 cache
-
-    avg_loss = epoch_loss / nBatches
-
-    print("===> Epoch {} Complete: Avg. Loss: {:.4f}".format(epoch, avg_loss),
-          flush=True)
-    writer.add_scalar('Train/AvgLoss', avg_loss, epoch)
-
-def test(eval_set, epoch=0, write_tboard=False):
-    # TODO what if features dont fit in memory?
-    test_data_loader = DataLoader(dataset=eval_set, num_workers=opt.threads,
-                                  batch_size=opt.cacheBatchSize, shuffle=False,
-                                  pin_memory=True)
-
-    model.eval()
-    with torch.no_grad():
-        print('====> Extracting Features')
-        pool_size = encoder_dim
-        if opt.pooling.lower() == 'netvlad': pool_size *= opt.num_clusters
-        dbFeat = np.empty((len(eval_set), pool_size))
-
-        for iteration, (input, indices) in enumerate(test_data_loader, 1):
-            input = input.to(device)
-            image_encoding = model.encoder(input)
-            if opt.withAttention:
-                image_encoding_a = model.attention(image_encoding)
-                vlad_encoding = model.pool(image_encoding_a)
-            else:
-                vlad_encoding = model.pool(image_encoding)
-
-            dbFeat[indices.detach().numpy(), :] = vlad_encoding.detach().cpu().numpy()
-            if iteration % 50 == 0 or len(test_data_loader) <= 10:
-                print("==> Batch ({}/{})".format(iteration, len(test_data_loader)), flush=True)
-
-            del input, image_encoding, vlad_encoding
-    del test_data_loader
-
-    # extracted for both db and query, now split in own sets
-    qFeat = dbFeat[eval_set.dbStruct.numDb:].astype('float32')
-    dbFeat = dbFeat[:eval_set.dbStruct.numDb].astype('float32')
-
-    print('====> Building faiss index')
-    faiss_index = faiss.IndexFlatL2(pool_size)
-    faiss_index.add(dbFeat)
-
-    print('====> Calculating recall @ N')
-    n_values = [1, 5, 10, 20]
-    if opt.dataset.lower() == 'tokyo247':
-        n_values = [10, 50, 100, 200]
-
-    _, predictions = faiss_index.search(qFeat, max(n_values))
-    predictionNew = []
-    if opt.dataset.lower() == 'tokyo247':
-        for idx, pred in enumerate(predictions):
-            keep = [True for pidx in pred if eval_set.dbStruct.dbTimeStamp[pidx] != eval_set.dbStruct.qTimeStamp[idx]]
-                    #or (not (eval_set.dbStruct.utmDb[pidx] == eval_set.dbStruct.utmQ[idx]).all())]
-            pred_keep = [pred[idxiii] for idxiii, iii in enumerate(keep) if iii is True]
-            predictionNew.append(pred_keep[:max(n_values)//10])
-        predictions = predictionNew
-        n_values = [1, 5, 10, 20]
-    # elif opt.dataset.lower() == 'pittsburgh':
-    #     for idx, pred in enumerate(predictions):
-    #         keep = [True for pidx in pred if not (eval_set.dbStruct.utmDb[pidx] == eval_set.dbStruct.utmQ[idx]).all()]
-    #         pred_keep = [pred[idxiii] for idxiii, iii in enumerate(keep) if iii is True]
-    #         predictionNew.append(pred_keep[:max(n_values)//10])
-    #     predictions = predictionNew
-    #     n_values = [1, 5, 10, 20]
-
-    # for each query get those within threshold distance
-    gt = eval_set.getPositives()
-
-    correct_at_n = np.zeros(len(n_values))
-    gtValid = 0
-    # TODO can we do this on the matrix in one go?
-    for qIx, pred in enumerate(predictions):
-        # print(pred)
-        # print(gt[qIx])
-        if gt[qIx].size:
-            gtValid += 1
-            for i, n in enumerate(n_values):
-                # if in top N then also in top NN, where NN > N
-                if np.any(np.in1d(pred[:n], gt[qIx])):
-                    correct_at_n[i:] += 1
-                    break
-    recall_at_n = correct_at_n / gtValid # eval_set.dbStruct.numQ
-
-
-    recalls = {}  # make dict for output
-    for i, n in enumerate(n_values):
-        recalls[n] = recall_at_n[i]
-        print("====> Recall@{}: {:.4f}".format(n, recall_at_n[i]))
-        if write_tboard: writer.add_scalar('Val/Recall@' + str(n), recall_at_n[i], epoch)
-
-    return recalls
 
 def get_clusters(cluster_set):
     nDescriptors = 50000
     nPerImage = 100
     nIm = ceil(nDescriptors / nPerImage)
-
 
     sampler = SubsetRandomSampler(np.random.choice(len(cluster_set), nIm, replace=False))
     data_loader = DataLoader(dataset=cluster_set,
@@ -305,7 +98,7 @@ def get_clusters(cluster_set):
             print('====> Extracting Descriptors')
             dbFeat = h5.create_dataset("descriptors",
                                        [nDescriptors, encoder_dim],
-                                       dtype=np.float32)#float32
+                                       dtype=np.float32)  # float32
 
             for iteration, (input, indices) in enumerate(data_loader, 1):
                 input = input.to(device)
@@ -331,6 +124,7 @@ def get_clusters(cluster_set):
         print('====> Storing centroids', kmeans.centroids.shape)
         h5.create_dataset('centroids', data=kmeans.centroids)
         print('====> Done!')
+
 
 def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
     model_out_path = join(opt.savePath, filename)
@@ -358,7 +152,7 @@ if __name__ == "__main__":
         raise Exception("No GPU found, program terminated")
     device = torch.device("cuda")
     random.seed(opt.seed)
-    np.random.seed(opt.seed)
+    np.random.random.seed(opt.seed)
     torch.manual_seed(opt.seed)
     torch.cuda.manual_seed(opt.seed)
 
@@ -367,19 +161,19 @@ if __name__ == "__main__":
         loadDataset.loadDataSet(opt.mode.lower(), opt.split.lower(), opt.dataset.lower(),
                                 opt.threads, opt.cacheBatchSize, opt.margin)
 
-## 构造网络模型
+    ## 构造网络模型
     print('===> Building model')
     model, encoder_dim, hook_dim = netavlad.getNetAVLADModel(pretrained=not opt.fromscratch, arch=opt.arch.lower(),
-                                                   mode=opt.mode.lower(), numTrain=opt.numTrain,
-                                                   withAttention=opt.withAttention, dataPath=opt.dataPath,
-                                                   pooling=opt.pooling.lower(), resume=opt.resume,
-                                                   num_clusters=opt.num_clusters, train_set=train_set,
-                                                   whole_test_set=whole_test_set, remain=opt.remain,
-                                                   vladv2=opt.vladv2, middleAttention=False)
+                                                             mode=opt.mode.lower(), numTrain=opt.numTrain,
+                                                             withAttention=opt.withAttention, dataPath=opt.dataPath,
+                                                             pooling=opt.pooling.lower(), resume=opt.resume,
+                                                             num_clusters=opt.num_clusters, train_set=train_set,
+                                                             whole_test_set=whole_test_set, remain=opt.remain,
+                                                             vladv2=opt.vladv2, middleAttention=False)
 
     isParallel = False
     if opt.nGPU > 1 and torch.cuda.device_count() > 1:
-        #torch.distributed.init_process_group(backend="nccl", init_method='file:///mnt/lustre/chengruiqi/sharedfile', rank=0, world_size=4)
+        # torch.distributed.init_process_group(backend="nccl", init_method='file:///mnt/lustre/chengruiqi/sharedfile', rank=0, world_size=4)
         print('Available GPU num = ', torch.cuda.device_count())
 
         model.encoder = nn.parallel.DataParallel(model.encoder)
@@ -387,19 +181,19 @@ if __name__ == "__main__":
             model.attention = nn.parallel.DataParallel(model.attention)
         if opt.mode.lower() != 'cluster':
             model.pool = nn.parallel.DataParallel(model.pool)
-            #model = nn.parallel.DataParallel(model)
+            # model = nn.parallel.DataParallel(model)
         # else:
         #     model.encoder = nn.parallel.DataParallel(model.encoder)
         isParallel = True
 
-## 读入预先训练结果
+    ## 读入预先训练结果
     if opt.resume:
         model, start_epoch, best_metric = loadCkpt.loadckpt(opt.ckpt.lower(), opt.resume, opt.start_epoch,
                                                             opt.mode.lower(), optLoaded, opt.nGPU, device, model)
     if not opt.resume:
         model = model.to(device)
 
-## 定义优化器和损失函数
+    ## 定义优化器和损失函数
     if opt.mode.lower() == 'train':
         if opt.optim.upper() == 'ADAM':
             optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()),
@@ -415,11 +209,9 @@ if __name__ == "__main__":
             raise ValueError('Unknown optimizer: ' + opt.optim)
 
         # original paper/code doesn't sqrt() the distances, we do, so sqrt() the margin, I think :D
-        criterion = nn.TripletMarginLoss(margin=opt.margin ** 0.5,
-                                         p=2, size_average=False).to(device)  # reduction='sum'
+        criterion = nn.TripletMarginLoss(margin=opt.margin ** 0.5, p=2, size_average=False).to(device)  # reduction='sum'
 
-
-## 执行test/cluster/train操作
+    ## 执行test/cluster/train操作
     if opt.mode.lower() == 'test':
         print('===> Running evaluation step')
         epoch = 1
@@ -476,4 +268,3 @@ if __name__ == "__main__":
 
         print("=> Best Recall@5: {:.4f}".format(best_score), flush=True)
         writer.close()
-
