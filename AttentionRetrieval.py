@@ -1,6 +1,6 @@
 # Train the NetVLAD network
 from __future__ import print_function
-import argparse
+
 from math import ceil
 import random, shutil, json
 from os.path import join, exists
@@ -25,55 +25,8 @@ import loadCkpt
 
 import warnings
 import arguments
-
-parser = argparse.ArgumentParser(description='PlaceRecognitionTrain')
-parser.add_argument('--mode', type=str, default='train', help='Mode', choices=['train', 'cluster', 'test'])
-parser.add_argument('--batchSize', type=int, default=4,
-                    help='Number of triplets (query, pos, negs). Each triplet consists of 12 images.')
-parser.add_argument('--cacheBatchSize', type=int, default=64, help='Batch size for caching and testing')
-parser.add_argument('--cacheRefreshRate', type=int, default=1000,
-                    help='How often to refresh cache, in number of queries. 0 for off')
-parser.add_argument('--nEpochs', type=int, default=30, help='number of epochs to train for')
-parser.add_argument('--start-epoch', default=0, type=int, metavar='N',
-                    help='manual epoch number (useful on restarts)')
-parser.add_argument('--nGPU', type=int, default=1, help='number of GPU to use.')
-parser.add_argument('--optim', type=str, default='SGD', help='optimizer to use', choices=['SGD', 'ADAM'])
-parser.add_argument('--lr', type=float, default=0.0001, help='Learning Rate.')
-parser.add_argument('--lrStep', type=float, default=5, help='Decay LR ever N steps.')
-parser.add_argument('--lrGamma', type=float, default=0.5, help='Multiply LR by Gamma for decaying.')
-parser.add_argument('--weightDecay', type=float, default=0.001, help='Weight decay for SGD.')
-parser.add_argument('--momentum', type=float, default=0.9, help='Momentum for SGD.')
-parser.add_argument('--threads', type=int, default=8, help='Number of threads for each data loader to use')
-parser.add_argument('--seed', type=int, default=123, help='Random seed to use.')
-parser.add_argument('--dataPath', type=str, default='data/', help='Path for centroid data.')
-parser.add_argument('--runsPath', type=str, default='runs/', help='Path to save runs to.')
-parser.add_argument('--savePath', type=str, default='checkpoints_res18_pitts30/',
-                    help='Path to save checkpoints to in logdir. Default=checkpoints/')
-parser.add_argument('--cachePath', type=str, default='tmp/', help='Path to save cache to.')
-parser.add_argument('--resume', type=str, default='',
-                    help='Path to load checkpoint from, for resuming training or testing.')
-parser.add_argument('--ckpt', type=str, default='latest',
-                    help='Resume from latest or best checkpoint.', choices=['latest', 'best'])
-parser.add_argument('--evalEvery', type=int, default=1,
-                    help='Do a validation set run, and save, every N epochs.')
-parser.add_argument('--patience', type=int, default=20, help='Patience for early stopping. 0 is off.')
-parser.add_argument('--dataset', type=str, default='tokyo247',
-                    help='Dataset to use', choices=['pittsburgh', 'tokyo247', 'highway', 'GB'])
-parser.add_argument('--arch', type=str, default='resnet18',
-                    help='basenetwork to use', choices=['vgg16', 'alexnet', 'resnet18', 'resnet34', 'resnet50'])
-parser.add_argument('--pooling', type=str, default='netvlad', help='type of pooling to use',
-                    choices=['netvlad', 'max', 'avg'])
-parser.add_argument('--num_clusters', type=int, default=64, help='Number of NetVlad clusters. Default=64')
-parser.add_argument('--margin', type=float, default=0.1, help='Margin for triplet loss. Default=0.1')
-parser.add_argument('--split', type=str, default='val', help='Data split to use for testing. Default is val',
-                    choices=['test', 'test250k', 'train', 'val'])
-parser.add_argument('--fromscratch', action='store_true', help='Train from scratch rather than using pretrained models')
-parser.add_argument('--numTrain', type=int, default=2, help='the number of trained layers of basenet')
-parser.add_argument('--withAttention', action='store_true', help='Whether with the attention module.')
-parser.add_argument('--remain', type=float, default=0.5, help='The remained ratio of feature map.')
-parser.add_argument('--vladv2', action='store_true', help='whether to use VLADv2.')
-parser.add_argument('--reduction', action='store_true', help='whether to perform PCA dimension reduction.')
-
+import TestScript
+import TrainScript
 
 
 def get_clusters(cluster_set):
@@ -133,26 +86,45 @@ def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
         shutil.copyfile(model_out_path, join(opt.savePath, 'model_best.pth.tar'))
 
 
+class RunningVariables:
+    def __init__(self):
+        self.opt = 0
+        self.train_set = 0
+        self.whole_train_set = 0
+        self.whole_training_dataloader = 0
+        self.whole_test_set = 0
+        self.dataset = 0
+
+    def set_opt(self, opt_):
+        self.opt = opt_
+
+    def set_dataset(self, train_set_, whole_train_set_, whole_training_data_loader_, whole_test_set_, dataset_):
+        self.train_set = train_set_
+        self.whole_train_set = whole_train_set_
+        self.whole_training_dataloader = whole_training_data_loader_
+        self.whole_test_set = whole_test_set_
+        self.dataset = dataset_
+
+
+
+
 if __name__ == "__main__":
     # ignore warnings -- UserWarning: Loky-backed parallel loops cannot be called in a multiprocessing, setting n_jobs=1
     warnings.filterwarnings("ignore")
 
-    ## read arguments from command or json file
-    opt = parser.parse_args()
-    restore_var = ['lr', 'lrStep', 'lrGamma', 'weightDecay', 'momentum', 'nGPU',
-                   'runsPath', 'savePath', 'arch', 'num_clusters', 'pooling', 'optim',
-                   'margin', 'seed', 'patience']
-    if opt.resume:
-        optLoaded = arguments.readArguments(opt, parser, restore_var)
+    rv = RunningVariables()
 
+    # get arguments from the json file or the command
+    opt = arguments.get_args()
     print(opt)
+    rv.set_opt(opt)
 
     ## desinate the device (CUDA) to train
     if not torch.cuda.is_available():
         raise Exception("No GPU found, program terminated")
     device = torch.device("cuda")
     random.seed(opt.seed)
-    np.random.random.seed(opt.seed)
+    np.random.seed(opt.seed)
     torch.manual_seed(opt.seed)
     torch.cuda.manual_seed(opt.seed)
 
@@ -160,6 +132,7 @@ if __name__ == "__main__":
     train_set, whole_train_set, whole_training_data_loader, whole_test_set, dataset = \
         loadDataset.loadDataSet(opt.mode.lower(), opt.split.lower(), opt.dataset.lower(),
                                 opt.threads, opt.cacheBatchSize, opt.margin)
+    rv.set_dataset(train_set, whole_train_set, whole_training_data_loader, whole_test_set, dataset)
 
     ## 构造网络模型
     print('===> Building model')
@@ -209,7 +182,8 @@ if __name__ == "__main__":
             raise ValueError('Unknown optimizer: ' + opt.optim)
 
         # original paper/code doesn't sqrt() the distances, we do, so sqrt() the margin, I think :D
-        criterion = nn.TripletMarginLoss(margin=opt.margin ** 0.5, p=2, size_average=False).to(device)  # reduction='sum'
+        criterion = nn.TripletMarginLoss(margin=opt.margin ** 0.5, p=2, size_average=False).to(
+            device)  # reduction='sum'
 
     ## 执行test/cluster/train操作
     if opt.mode.lower() == 'test':
