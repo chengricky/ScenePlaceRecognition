@@ -12,7 +12,7 @@ from PIL import Image
 from sklearn.neighbors import NearestNeighbors
 import h5py
 
-root_dir = '/mnt/lustre/chengruiqi/Pittsburgh/'
+root_dir = '/data/Pittsburgh/'
 if not exists(root_dir):
     raise FileNotFoundError('root_dir is hardcoded, please adjust to point to Pittsburth dataset')
 

@@ -79,8 +79,21 @@ def baseResNet(type=50, numTrain=2):
             p.requires_grad = False
     return layers
 
-def getNetAVLADModel(pretrained, arch, mode, numTrain, withAttention, pooling, resume, dataPath, num_clusters,
-                     train_set, whole_test_set, remain, middleAttention, vladv2=True):
+
+def get_netavlad_model(opt, train_set, whole_test_set, middleAttention):
+
+    pretrained = not opt.fromscratch
+    arch = opt.arch.lower()
+    mode = opt.mode.lower()
+    numTrain = opt.numTrain
+    withAttention = opt.withAttention
+    dataPath = opt.dataPath
+    pooling = opt.pooling.lower()
+    resume = opt.resume
+    num_clusters = opt.num_clusters
+    remain = opt.remain
+    vladv2 = opt.vladv2
+
     hook_dim = 0
 
     if arch == 'alexnet':

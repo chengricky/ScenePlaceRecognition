@@ -4,7 +4,7 @@ from __future__ import print_function
 from math import ceil
 import random, shutil, json
 from os.path import join, exists
-from os import makedirs, remove
+from os import makedirs
 
 import torch
 import torch.nn as nn
@@ -91,9 +91,13 @@ class RunningVariables:
         self.opt = 0
         self.train_set = 0
         self.whole_train_set = 0
-        self.whole_training_dataloader = 0
+        self.whole_training_data_loader = 0
         self.whole_test_set = 0
         self.dataset = 0
+        self.model = 0
+        self.encoder_dim = 0
+        self.hook_dim = 0
+        self.device = 0
 
     def set_opt(self, opt_):
         self.opt = opt_
@@ -101,11 +105,17 @@ class RunningVariables:
     def set_dataset(self, train_set_, whole_train_set_, whole_training_data_loader_, whole_test_set_, dataset_):
         self.train_set = train_set_
         self.whole_train_set = whole_train_set_
-        self.whole_training_dataloader = whole_training_data_loader_
+        self.whole_training_data_loader = whole_training_data_loader_
         self.whole_test_set = whole_test_set_
         self.dataset = dataset_
 
+    def set_model(self, model_, encoder_dim_, hook_dim_):
+        self.model = model_
+        self.encoder_dim = encoder_dim_
+        self.hook_dim = hook_dim_
 
+    def set_device(self, device_):
+        self.device = device_
 
 
 if __name__ == "__main__":
@@ -127,6 +137,7 @@ if __name__ == "__main__":
     np.random.seed(opt.seed)
     torch.manual_seed(opt.seed)
     torch.cuda.manual_seed(opt.seed)
+    rv.set_device(device)
 
     print('===> Loading dataset(s)')
     train_set, whole_train_set, whole_training_data_loader, whole_test_set, dataset = \
@@ -136,13 +147,9 @@ if __name__ == "__main__":
 
     ## 构造网络模型
     print('===> Building model')
-    model, encoder_dim, hook_dim = netavlad.getNetAVLADModel(pretrained=not opt.fromscratch, arch=opt.arch.lower(),
-                                                             mode=opt.mode.lower(), numTrain=opt.numTrain,
-                                                             withAttention=opt.withAttention, dataPath=opt.dataPath,
-                                                             pooling=opt.pooling.lower(), resume=opt.resume,
-                                                             num_clusters=opt.num_clusters, train_set=train_set,
-                                                             whole_test_set=whole_test_set, remain=opt.remain,
-                                                             vladv2=opt.vladv2, middleAttention=False)
+    model, encoder_dim, hook_dim = netavlad.get_netavlad_model(opt=opt, train_set=train_set,
+                                                               whole_test_set=whole_test_set,
+                                                               middleAttention=False)
 
     isParallel = False
     if opt.nGPU > 1 and torch.cuda.device_count() > 1:
@@ -162,9 +169,11 @@ if __name__ == "__main__":
     ## 读入预先训练结果
     if opt.resume:
         model, start_epoch, best_metric = loadCkpt.loadckpt(opt.ckpt.lower(), opt.resume, opt.start_epoch,
-                                                            opt.mode.lower(), optLoaded, opt.nGPU, device, model)
+                                                            opt.mode.lower(), opt, opt.nGPU, device, model)
     if not opt.resume:
         model = model.to(device)
+
+    rv.set_model(model, encoder_dim, hook_dim)
 
     ## 定义优化器和损失函数
     if opt.mode.lower() == 'train':
@@ -189,7 +198,7 @@ if __name__ == "__main__":
     if opt.mode.lower() == 'test':
         print('===> Running evaluation step')
         epoch = 1
-        recalls = test(whole_test_set, epoch, write_tboard=False)
+        recalls = TestScript.test(rv, opt, epoch, write_tboard=False)
 
     elif opt.mode.lower() == 'cluster':
         print('===> Calculating descriptors and clusters')
@@ -217,9 +226,9 @@ if __name__ == "__main__":
         for epoch in range(opt.start_epoch + 1, opt.nEpochs + 1):
             if opt.optim.upper() == 'SGD':
                 scheduler.step(epoch)
-            train(epoch)
+            TrainScript.train(rv, writer, opt, epoch)
             if (epoch % opt.evalEvery) == 0:
-                recalls = test(whole_test_set, epoch, write_tboard=True)
+                recalls = TestScript.test(rv, opt, epoch, write_tboard=True)
                 is_best = recalls[5] > best_score
                 if is_best:
                     not_improved = 0

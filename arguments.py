@@ -27,7 +27,7 @@ parser.add_argument('--dataPath', type=str, default='data/', help='Path for cent
 parser.add_argument('--runsPath', type=str, default='runs/', help='Path to save runs to.')
 parser.add_argument('--savePath', type=str, default='checkpoints_res18_pitts30/',
                     help='Path to save checkpoints to in logdir. Default=checkpoints/')
-parser.add_argument('--cachePath', type=str, default='tmp/', help='Path to save cache to.')
+parser.add_argument('--cachePath', type=str, default='/tmp/', help='Path to save cache to.')
 parser.add_argument('--resume', type=str, default='',
                     help='Path to load checkpoint from, for resuming training or testing.')
 parser.add_argument('--ckpt', type=str, default='latest',
