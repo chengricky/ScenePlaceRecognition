@@ -6,9 +6,9 @@ import argparse
 
 parser = argparse.ArgumentParser(description='PlaceRecognitionTrainParameters')
 parser.add_argument('--mode', type=str, default='train', help='Mode', choices=['train', 'cluster', 'test'])
-parser.add_argument('--batchSize', type=int, default=4,
+parser.add_argument('--batchSize', type=int, default=3,
                     help='Number of triplets (query, pos, negs). Each triplet consists of 12 images.')
-parser.add_argument('--cacheBatchSize', type=int, default=64, help='Batch size for caching and testing')
+parser.add_argument('--cacheBatchSize', type=int, default=24, help='Batch size for caching and testing')
 parser.add_argument('--cacheRefreshRate', type=int, default=1000,
                     help='How often to refresh cache, in number of queries. 0 for off')
 parser.add_argument('--nEpochs', type=int, default=30, help='number of epochs to train for')
@@ -23,19 +23,19 @@ parser.add_argument('--weightDecay', type=float, default=0.001, help='Weight dec
 parser.add_argument('--momentum', type=float, default=0.9, help='Momentum for SGD.')
 parser.add_argument('--threads', type=int, default=8, help='Number of threads for each data loader to use')
 parser.add_argument('--seed', type=int, default=123, help='Random seed to use.')
-parser.add_argument('--dataPath', type=str, default='data/', help='Path for centroid data.')
+parser.add_argument('--dataPath', type=str, default='data/', help='Path for centroeid data.')
 parser.add_argument('--runsPath', type=str, default='runs/', help='Path to save runs to.')
 parser.add_argument('--savePath', type=str, default='checkpoints_res18_pitts30/',
                     help='Path to save checkpoints to in logdir. Default=checkpoints/')
 parser.add_argument('--cachePath', type=str, default='/tmp/', help='Path to save cache to.')
-parser.add_argument('--resume', type=str, default='',
+parser.add_argument('--resume', type=str, default='checkpoints',
                     help='Path to load checkpoint from, for resuming training or testing.')
 parser.add_argument('--ckpt', type=str, default='latest',
                     help='Resume from latest or best checkpoint.', choices=['latest', 'best'])
 parser.add_argument('--evalEvery', type=int, default=1,
                     help='Do a validation set run, and save, every N epochs.')
 parser.add_argument('--patience', type=int, default=20, help='Patience for early stopping. 0 is off.')
-parser.add_argument('--dataset', type=str, default='tokyo247',
+parser.add_argument('--dataset', type=str, default='pittsburgh',
                     help='Dataset to use', choices=['pittsburgh', 'tokyo247', 'highway', 'GB'])
 parser.add_argument('--arch', type=str, default='resnet18',
                     help='basenetwork to use', choices=['vgg16', 'alexnet', 'resnet18', 'resnet34', 'resnet50'])
@@ -43,7 +43,7 @@ parser.add_argument('--pooling', type=str, default='netvlad', help='type of pool
                     choices=['netvlad', 'max', 'avg'])
 parser.add_argument('--num_clusters', type=int, default=64, help='Number of NetVlad clusters. Default=64')
 parser.add_argument('--margin', type=float, default=0.1, help='Margin for triplet loss. Default=0.1')
-parser.add_argument('--split', type=str, default='val', help='Data split to use for testing. Default is val',
+parser.add_argument('--split', type=str, default='test', help='Data split to use for testing. Default is val',
                     choices=['test', 'test250k', 'train', 'val'])
 parser.add_argument('--fromscratch', action='store_true', help='Train from scratch rather than using pretrained models')
 parser.add_argument('--numTrain', type=int, default=2, help='the number of trained layers of basenet')
@@ -56,11 +56,13 @@ parser.add_argument('--reduction', action='store_true', help='whether to perform
 def get_args():
     # read arguments from command or json file
     opt = parser.parse_args()
-    restore_var = ['lr', 'lrStep', 'lrGamma', 'weightDecay', 'momentum', 'nGPU',
+    restore_var = [ 'lr', 'lrStep', 'lrGamma', 'weightDecay', 'momentum', 'nGPU',
                    'runsPath', 'savePath', 'arch', 'num_clusters', 'pooling', 'optim',
                    'margin', 'seed', 'patience']
     if opt.resume:
         opt_loaded = read_arguments(opt, parser, restore_var)
+
+
         return opt_loaded
     else:
         return opt
@@ -71,6 +73,7 @@ def read_arguments(opt, parser_, restore_var):
     if os.path.exists(flag_file):
         with open(flag_file, 'r') as f:
             stored_flags = {'--' + k: str(v) for k, v in json.load(f).items() if k in restore_var}
+
             to_del = []
             for flag, val in stored_flags.items():
                 for act in parser_._actions:
@@ -85,5 +88,5 @@ def read_arguments(opt, parser_, restore_var):
 
             train_flags = [x for x in list(sum(stored_flags.items(), tuple())) if len(x) > 0]
             print('Restored flags:', train_flags)
-            opt_load = parser_.parse_args(train_flags)
+            opt_load = parser_.parse_args(train_flags, namespace=opt)
     return opt_load

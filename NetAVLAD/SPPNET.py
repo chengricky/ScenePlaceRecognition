@@ -9,8 +9,9 @@ class SpatialPyramidPooling2d(nn.Module):
     with additional channel dimension) as described in the paper
     'Spatial Pyramid Pooling in deep convolutional Networks for visual recognition'
     Args:
-        num_level:
+        num_level: the output size of the pooling layer, list: i.e. [2,4,6,8] (the original scale is added defaultly)
         pool_type: max_pool, avg_pool, Default:max_pool
+        overlap: whether to overlap when pooling
     By the way, the target output size is num_grid:
         num_grid = 0
         for i in range num_level:
@@ -25,28 +26,32 @@ class SpatialPyramidPooling2d(nn.Module):
         # >>> output = net(input)
     """
 
-    def __init__(self, num_level, pool_type='max_pool'):
+    def __init__(self, num_level, overlap=True, pool_type='max_pool'):
         super(SpatialPyramidPooling2d, self).__init__()
         self.num_level = num_level
         self.pool_type = pool_type
+        self.overlap = overlap
 
     def forward(self, x):
         N, C, H, W = x.size()
-        for i in range(self.num_level):
-            level = i + 1
-            kernel_size = (ceil(H / level), ceil(W / level))
-            stride = (ceil(H / level), ceil(W / level))
-            padding = (floor((kernel_size[0] * level - H + 1) / 2), floor((kernel_size[1] * level - W + 1) / 2))
+        res = x.view(N, C, -1)
+        for level in self.num_level:
+            if not self.overlap:
+                kernel_size = (ceil(H / level), ceil(W / level))
+                stride = kernel_size
+                padding = (floor((kernel_size[0] * level - H + 1) / 2), floor((kernel_size[1] * level - W + 1) / 2))
+            else:
+                kernel_size = (ceil(2*H / (level+1)), ceil(2*W / (level+1)))
+                stride = (ceil(H / (level+1)), ceil(W / (level+1)))
+                remainder = (kernel_size[0]+(level-1)*stride[0]-H, kernel_size[1]+(level-1)*stride[1]-W)
+                padding = (floor(remainder[0]/2), floor(remainder[1]/2))
 
             if self.pool_type == 'max_pool':
-                tensor = (F.max_pool2d(x, kernel_size=kernel_size, stride=stride, padding=padding)).view(N, -1)
+                tensor = (F.max_pool2d(x, kernel_size=kernel_size, stride=stride, padding=padding)).view(N, C, -1)
             else:
-                tensor = (F.avg_pool2d(x, kernel_size=kernel_size, stride=stride, padding=padding)).view(N, -1)
+                tensor = (F.avg_pool2d(x, kernel_size=kernel_size, stride=stride, padding=padding)).view(N, C, -1)
 
-            if i == 0:
-                res = tensor
-            else:
-                res = torch.cat((res, tensor), 1)
+            res = torch.cat((res, tensor), 1)
         return res
 
     def __repr__(self):
@@ -56,19 +61,21 @@ class SpatialPyramidPooling2d(nn.Module):
 
 
 class SPPNet(nn.Module):
-    def __init__(self, num_level=3, pool_type='max_pool'):
+    def __init__(self, num_level=None, pool_type='max_pool'):
         super(SPPNet, self).__init__()
+        if num_level is None:
+            num_level = [2, 4, 6, 8]
         self.num_level = num_level
         self.pool_type = pool_type
-        self.feature = nn.Sequential(nn.Conv2d(3, 64, 3),
-                                     nn.ReLU(),
-                                     nn.MaxPool2d(2),
-                                     nn.Conv2d(64, 64, 3),
-                                     nn.ReLU())
-        self.num_grid = self._cal_num_grids(num_level)
+        # self.feature = nn.Sequential(nn.Conv2d(3, 64, 3),
+        #                              nn.ReLU(),
+        #                              nn.MaxPool2d(2),
+        #                              nn.Conv2d(64, 64, 3),
+        #                              nn.ReLU())
+        # self.num_grid = self._cal_num_grids(num_level)
         self.spp_layer = SpatialPyramidPooling2d(num_level)
-        self.linear = nn.Sequential(nn.Linear(self.num_grid * 64, 512),
-                                    nn.Linear(512, 10))
+        # self.linear = nn.Sequential(nn.Linear(self.num_grid * 64, 512),
+        #                             nn.Linear(512, 10))
 
     def _cal_num_grids(self, level):
         count = 0
@@ -77,8 +84,8 @@ class SPPNet(nn.Module):
         return count
 
     def forward(self, x):
-        x = self.feature(x)
+        # x = self.feature(x)
         x = self.spp_layer(x)
-        print(x.size())
-        x = self.linear(x)
+        # print(x.size())
+        # x = self.linear(x)
         return x
