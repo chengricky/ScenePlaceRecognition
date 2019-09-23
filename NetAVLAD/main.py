@@ -212,7 +212,7 @@ def test(eval_set, epoch=0, write_tboard=False):
     _, predictions = faiss_index.search(qFeat, max(n_values)) 
 
     # for each query get those within threshold distance
-    gt = eval_set.getPositives() 
+    gt = eval_set.get_positives()
 
     correct_at_n = np.zeros(len(n_values))
     #TODO can we do this on the matrix in one go?

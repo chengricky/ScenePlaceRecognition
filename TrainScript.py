@@ -108,9 +108,9 @@ def train(rv, writer, opt, epoch):
             if iteration % 50 == 0 or nBatches <= 10:
                 print("==> Epoch[{}]({}/{}): Loss: {:.4f}".format(epoch, iteration,
                                                                   nBatches, batch_loss), flush=True)
-                rv.writer.add_scalar('Train/Loss', batch_loss,
+                writer.add_scalar('Train/Loss', batch_loss,
                                   ((epoch - 1) * nBatches) + iteration)
-                rv.writer.add_scalar('Train/nNeg', nNeg,
+                writer.add_scalar('Train/nNeg', nNeg,
                                   ((epoch - 1) * nBatches) + iteration)
                 print('Allocated:', torch.cuda.memory_allocated())
                 print('Cached:', torch.cuda.memory_cached())

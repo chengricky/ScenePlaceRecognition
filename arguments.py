@@ -17,7 +17,7 @@ parser.add_argument('--start-epoch', default=0, type=int, metavar='N',
 parser.add_argument('--nGPU', type=int, default=1, help='number of GPU to use.')
 parser.add_argument('--optim', type=str, default='SGD', help='optimizer to use', choices=['SGD', 'ADAM'])
 parser.add_argument('--lr', type=float, default=0.0001, help='Learning Rate.')
-parser.add_argument('--lrStep', type=float, default=5, help='Decay LR ever N steps.')
+parser.add_argument('--lrStep', type=float, default=10, help='Decay LR ever N steps.')
 parser.add_argument('--lrGamma', type=float, default=0.5, help='Multiply LR by Gamma for decaying.')
 parser.add_argument('--weightDecay', type=float, default=0.001, help='Weight decay for SGD.')
 parser.add_argument('--momentum', type=float, default=0.9, help='Momentum for SGD.')
@@ -28,7 +28,7 @@ parser.add_argument('--runsPath', type=str, default='runs/', help='Path to save 
 parser.add_argument('--savePath', type=str, default='checkpoints_res18_pitts30/',
                     help='Path to save checkpoints to in logdir. Default=checkpoints/')
 parser.add_argument('--cachePath', type=str, default='/tmp/', help='Path to save cache to.')
-parser.add_argument('--resume', type=str, default='checkpoints',
+parser.add_argument('--resume', type=str, default='',
                     help='Path to load checkpoint from, for resuming training or testing.')
 parser.add_argument('--ckpt', type=str, default='latest',
                     help='Resume from latest or best checkpoint.', choices=['latest', 'best'])

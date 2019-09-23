@@ -2,7 +2,7 @@ import torch
 import torchvision.transforms as transforms
 import torch.utils.data as data
 
-from os.path import join, exists
+from os.path import join, exists, dirname, abspath
 from scipy.io import loadmat
 import numpy as np
 from random import randint, random
@@ -12,6 +12,10 @@ from PIL import Image
 from sklearn.neighbors import NearestNeighbors
 import h5py
 
+from DataSet.data_augment import *
+from torchvision.transforms import ColorJitter
+import yaml
+
 root_dir = '/data/Pittsburgh/'
 if not exists(root_dir):
     raise FileNotFoundError('root_dir is hardcoded, please adjust to point to Pittsburth dataset')
@@ -19,67 +23,100 @@ if not exists(root_dir):
 struct_dir = join(root_dir, 'datasets/')
 queries_dir = join(root_dir, 'queries_real')
 
+
+def data_aug(img, configs):
+    # 数据增强
+    jitter = ColorJitter(configs['brightness'], configs['contrast'], configs['saturation'], configs['hue'])
+    name2func = {
+        # 'blur': lambda img_in: gaussian_blur(img_in, configs['blur_range']),
+        # Randomly change the brightness, contrast and saturation of an image.
+        'jitter': lambda img_in: np.asarray(jitter(img_in)),
+        # 'noise': lambda img_in: add_noise(img_in),
+        'none': lambda img_in: img_in,
+        # 'sp_gaussian_noise': lambda img_in: additive_gaussian_noise(img_in, configs['sp_gaussian_range']),
+        # 'sp_speckle_noise': lambda img_in: additive_speckle_noise(img_in, configs['sp_speckle_prob_range']),
+        # 'sp_additive_shade': lambda img_in: additive_shade(img_in, configs['sp_nb_ellipse'],
+        #                                                    configs['sp_transparency_range'],
+        #                                                    configs['sp_kernel_size_range']),
+        'motion_blur': lambda img_in: motion_blur(img_in, configs['sp_max_kernel_size']),
+        # 'resize_blur': lambda img_in: resize_blur(img_in, configs['resize_blur_min_ratio'])
+        'random_rotate_img': lambda img_in: random_rotate_img(img_in, configs["min_angle"], configs["max_angle"])
+    }
+
+    # ['random_rotate_img','jitter','motion_blur','none']
+    if len(configs['augment_classes']) > configs['augment_num']:
+        augment_classes = np.random.choice(configs['augment_classes'], configs['augment_num'],
+                                           False, p=configs['augment_classes_weight'])
+    elif 0 < len(configs['augment_classes']) <= configs['augment_num']:
+        augment_classes = configs["augment_classes"]
+    else:
+        return img
+
+    for ac in augment_classes:
+        img = name2func[ac](img)
+    return img
+
+
 def input_transform():
     return transforms.Compose([
         transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                               std=[0.229, 0.224, 0.225]),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
+
 
 def get_whole_training_set(onlyDB=False):
     structFile = join(struct_dir, 'pitts30k_train.mat')
-    return WholeDatasetFromStruct(structFile,
-                             input_transform=input_transform(),
-                             onlyDB=onlyDB)
+    return WholeDatasetFromStruct(structFile, input_transform=input_transform(), onlyDB=onlyDB)
+
 
 def get_250k_whole_training_set(onlyDB=False):
     structFile = join(struct_dir, 'pitts250k_train.mat')
-    return WholeDatasetFromStruct(structFile,
-                             input_transform=input_transform(),
-                             onlyDB=onlyDB)
+    return WholeDatasetFromStruct(structFile, input_transform=input_transform(), onlyDB=onlyDB)
+
 
 def get_whole_val_set():
     structFile = join(struct_dir, 'pitts30k_val.mat')
-    return WholeDatasetFromStruct(structFile,
-                             input_transform=input_transform())
+    return WholeDatasetFromStruct(structFile, input_transform=input_transform())
+
 
 def get_250k_val_set():
     structFile = join(struct_dir, 'pitts250k_val.mat')
-    return WholeDatasetFromStruct(structFile,
-                             input_transform=input_transform())
+    return WholeDatasetFromStruct(structFile, input_transform=input_transform())
+
+
 def get_whole_test_set():
     structFile = join(struct_dir, 'pitts30k_test.mat')
-    return WholeDatasetFromStruct(structFile,
-                             input_transform=input_transform())
+    return WholeDatasetFromStruct(structFile, input_transform=input_transform())
+
 
 def get_250k_test_set():
     structFile = join(struct_dir, 'pitts250k_test.mat')
-    return WholeDatasetFromStruct(structFile,
-                             input_transform=input_transform())
+    return WholeDatasetFromStruct(structFile, input_transform=input_transform())
+
 
 def get_training_query_set(margin=0.1):
     structFile = join(struct_dir, 'pitts30k_train.mat')
-    return QueryDatasetFromStruct(structFile,
-                             input_transform=input_transform(), margin=margin)
+    return QueryDatasetFromStruct(structFile, input_transform=input_transform(), margin=margin)
+
 
 def get_250k_training_query_set(margin=0.1):
     structFile = join(struct_dir, 'pitts250k_train.mat')
-    return QueryDatasetFromStruct(structFile,
-                             input_transform=input_transform(), margin=margin)
+    return QueryDatasetFromStruct(structFile, input_transform=input_transform(), margin=margin)
+
 
 def get_val_query_set():
     structFile = join(struct_dir, 'pitts30k_val.mat')
-    return QueryDatasetFromStruct(structFile,
-                             input_transform=input_transform())
+    return QueryDatasetFromStruct(structFile, input_transform=input_transform())
+
 
 def get_250k_val_query_set():
     structFile = join(struct_dir, 'pitts250k_val.mat')
-    return QueryDatasetFromStruct(structFile,
-                             input_transform=input_transform())
+    return QueryDatasetFromStruct(structFile, input_transform=input_transform())
 
-dbStruct = namedtuple('dbStruct', ['whichSet', 'dataset', 
-    'dbImage', 'utmDb', 'qImage', 'utmQ', 'numDb', 'numQ',
-    'posDistThr', 'posDistSqThr', 'nonTrivPosDistSqThr'])
+
+dbStruct = namedtuple('dbStruct', ['whichSet', 'dataset', 'dbImage', 'utmDb', 'qImage', 'utmQ',
+                                   'numDb', 'numQ', 'posDistThr', 'posDistSqThr', 'nonTrivPosDistSqThr'])
+
 
 def parse_dbStruct(path):
     mat = loadmat(path)
@@ -109,11 +146,13 @@ def parse_dbStruct(path):
                     utmQ, numDb, numQ, posDistThr,
                     posDistSqThr, nonTrivPosDistSqThr)
 
+
 class WholeDatasetFromStruct(data.Dataset):
     def __init__(self, structFile, input_transform=None, onlyDB=False):
         super().__init__()
 
         self.input_transform = input_transform
+        self.is_train = "train.mat" in structFile
 
         self.dbStruct = parse_dbStruct(structFile)
         self.images = [join(root_dir, dbIm) for dbIm in self.dbStruct.dbImage]
@@ -126,8 +165,15 @@ class WholeDatasetFromStruct(data.Dataset):
         self.positives = None
         self.distances = None
 
+        self.augment_config = None
+        with open(join(dirname(dirname(abspath(__file__))), 'DataSet/data_augment.yaml'), 'r') as f:
+            self.augment_config = yaml.load(f)
+
     def __getitem__(self, index):
         img = Image.open(self.images[index])
+
+        if self.is_train:
+            img = data_aug(img, self.augment_config)
 
         if self.input_transform:
             img = self.input_transform(img)
@@ -137,18 +183,21 @@ class WholeDatasetFromStruct(data.Dataset):
     def __len__(self):
         return len(self.images)
 
-    def getPositives(self):
+
+
+    def get_positives(self):
         # positives for evaluation are those within trivial threshold range
-        #fit NN to find them, search by radius
-        if  self.positives is None:
+        # fit NN to find them, search by radius
+        if self.positives is None:
             knn = NearestNeighbors(n_jobs=-1)
             knn.fit(self.dbStruct.utmDb)
 
             self.distances, self.positives = knn.radius_neighbors(self.dbStruct.utmQ,
-                    radius=self.dbStruct.posDistThr)
+                                                                  radius=self.dbStruct.posDistThr)
 
         return self.positives
-        
+
+
 def collate_fn(batch):
     """Creates mini-batch tensors from the list of tuples (query, positive, negatives).
     
@@ -176,6 +225,7 @@ def collate_fn(batch):
     indices = list(itertools.chain(*indices))
 
     return query, positive, negatives, negCounts, indices
+
 
 class QueryDatasetFromStruct(data.Dataset):
     def __init__(self, structFile, nNegSample=1000, nNeg=10, margin=0.1, input_transform=None):

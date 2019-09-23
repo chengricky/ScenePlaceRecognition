@@ -65,7 +65,7 @@ def test(rv, opt, epoch=0, write_tboard=False):
     #     n_values = [1, 5, 10, 20]
 
     # for each query get those within threshold distance
-    gt = rv.whole_test_set.getPositives()
+    gt = rv.whole_test_set.get_positives()
 
     correct_at_n = np.zeros(len(n_values))
     gtValid = 0

@@ -2,7 +2,9 @@
 data/
 runs/
 checkpoints*/
+ckpt_*/
 *.pth.tar
+*.pth
 
 
 # Created by .ignore support plugin (hsz.mobi)
