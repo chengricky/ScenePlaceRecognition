@@ -15,6 +15,7 @@ import h5py
 from DataSet.data_augment import *
 from torchvision.transforms import ColorJitter
 import yaml
+import faiss
 
 root_dir = '/data/Pittsburgh/'
 if not exists(root_dir):
@@ -79,7 +80,7 @@ def get_whole_val_set():
     return WholeDatasetFromStruct(structFile, input_transform=input_transform())
 
 
-def get_250k_val_set():
+def get_250k_whole_val_set():
     structFile = join(struct_dir, 'pitts250k_val.mat')
     return WholeDatasetFromStruct(structFile, input_transform=input_transform())
 
@@ -89,7 +90,7 @@ def get_whole_test_set():
     return WholeDatasetFromStruct(structFile, input_transform=input_transform())
 
 
-def get_250k_test_set():
+def get_250k_whole_test_set():
     structFile = join(struct_dir, 'pitts250k_test.mat')
     return WholeDatasetFromStruct(structFile, input_transform=input_transform())
 
@@ -231,17 +232,23 @@ class QueryDatasetFromStruct(data.Dataset):
     def __init__(self, structFile, nNegSample=1000, nNeg=10, margin=0.1, input_transform=None):
         super().__init__()
 
+        self.is_train = "train.mat" in structFile
         self.input_transform = input_transform
         self.margin = margin
 
         self.dbStruct = parse_dbStruct(structFile)
         self.whichSet = self.dbStruct.whichSet
         self.dataset = self.dbStruct.dataset
-        self.nNegSample = nNegSample # number of negatives to randomly sample
-        self.nNeg = nNeg # number of negatives used for training
+        # number of negatives to randomly sample
+        self.nNegSample = nNegSample
+        # number of negatives used for training
+        self.nNeg = nNeg
+
+        # use a single GPU
+        # self.res = faiss.StandardGpuResources()
 
         # potential positives are those within nontrivial threshold range
-        #fit NN to find them, search by radius
+        # fit NN to find them, search by radius
         knn = NearestNeighbors(n_jobs=-1)
         knn.fit(self.dbStruct.utmDb)
         self.nontrivial_positives = knn.radius_neighbors(self.dbStruct.utmQ,
@@ -257,8 +264,8 @@ class QueryDatasetFromStruct(data.Dataset):
 
         # potential negatives are those outside of posDistThr range
         potential_positives = knn.radius_neighbors(self.dbStruct.utmQ,
-                radius=self.dbStruct.posDistThr,
-                return_distance=False)
+                                                   radius=self.dbStruct.posDistThr,
+                                                   return_distance=False)
 
         self.potential_negatives = []
         for pos in potential_positives:
@@ -269,6 +276,14 @@ class QueryDatasetFromStruct(data.Dataset):
 
         self.negCache = [np.empty((0,)) for _ in range(self.dbStruct.numQ)]
 
+        self.augment_config = None
+        with open(join(dirname(dirname(abspath(__file__))), 'DataSet/data_augment.yaml'), 'r') as f:
+            self.augment_config = yaml.load(f)
+
+        self.pool_size = 0
+        # self.gpu_index_flat = None
+        self.index_flat = None
+
     def __getitem__(self, index):
         index = self.queries[index] # re-map index to match dataset
         with h5py.File(self.cache, mode='r') as h5: 
@@ -278,9 +293,24 @@ class QueryDatasetFromStruct(data.Dataset):
             qFeat = h5feat[index+qOffset]
 
             posFeat = h5feat[self.nontrivial_positives[index].tolist()]
-            knn = NearestNeighbors(n_jobs=-1) # TODO replace with faiss?
-            knn.fit(posFeat)
-            dPos, posNN = knn.kneighbors(qFeat.reshape(1,-1), 1)
+
+            if self.pool_size == 0:
+                # netVLAD dimension
+                pool_size = posFeat.shape[1]
+                # build a flat (CPU) index
+                self.index_flat = faiss.IndexFlatL2(pool_size)
+                # make it into a gpu index
+                # self.gpu_index_flat = faiss.index_cpu_to_gpu(self.res, 0, index_flat)
+            else:
+                self.index_flat.reset()
+            # add vectors to the index
+            self.index_flat.add(posFeat)
+            # search for the nearest +ive
+            dPos, posNN = self.index_flat.search(qFeat.reshape(1, -1).astype('float32'), 1)
+
+            # knn = NearestNeighbors(n_jobs=-1)
+            # knn.fit(posFeat)
+            # dPos, posNN = knn.kneighbors(qFeat.reshape(1,-1), 1)
             dPos = dPos.item()
             posIndex = self.nontrivial_positives[index][posNN[0]].item()
 
@@ -288,10 +318,15 @@ class QueryDatasetFromStruct(data.Dataset):
             negSample = np.unique(np.concatenate([self.negCache[index], negSample]))
 
             negFeat = h5feat[negSample.tolist()]
-            knn.fit(negFeat)
+            self.index_flat.reset()
+            self.index_flat.add(negFeat)
+            # to quote netVLAD paper code: 10x is hacky but fine
+            dNeg, negNN = self.index_flat.search(qFeat.reshape(1, -1).astype('float32'), self.nNeg*10)
 
-            dNeg, negNN = knn.kneighbors(qFeat.reshape(1,-1), 
-                    self.nNeg*10) # to quote netvlad paper code: 10x is hacky but fine
+
+            # knn.fit(negFeat)
+            # dNeg, negNN = knn.kneighbors(qFeat.reshape(1,-1),
+            #         self.nNeg*10) # to quote netvlad paper code: 10x is hacky but fine
             dNeg = dNeg.reshape(-1)
             negNN = negNN.reshape(-1)
 
@@ -309,6 +344,10 @@ class QueryDatasetFromStruct(data.Dataset):
         query = Image.open(join(queries_dir, self.dbStruct.qImage[index]))
         positive = Image.open(join(root_dir, self.dbStruct.dbImage[posIndex]))
 
+        if self.is_train:
+            query = data_aug(query, self.augment_config)
+            positive = data_aug(positive, self.augment_config)
+
         if self.input_transform:
             query = self.input_transform(query)
             positive = self.input_transform(positive)
@@ -316,6 +355,8 @@ class QueryDatasetFromStruct(data.Dataset):
         negatives = []
         for negIndex in negIndices:
             negative = Image.open(join(root_dir, self.dbStruct.dbImage[negIndex]))
+            if self.is_train:
+                negative = data_aug(negative, self.augment_config)
             if self.input_transform:
                 negative = self.input_transform(negative)
             negatives.append(negative)

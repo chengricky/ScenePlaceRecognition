@@ -38,7 +38,7 @@ def loadDataSet(mode, split, whichdataset, threads, cacheBatchSize, margin):
             whole_test_set = dataset.get_whole_test_set()
             print('===> Evaluating on test set')
         elif split == 'test250k':
-            whole_test_set = dataset.get_250k_test_set()
+            whole_test_set = dataset.get_250k_whole_test_set()
             print('===> Evaluating on test250k set')
         elif split == 'train':
             whole_test_set = dataset.get_whole_training_set()

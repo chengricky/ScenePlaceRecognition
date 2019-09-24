@@ -38,15 +38,23 @@ def test(rv, opt, epoch=0, write_tboard=False):
     dbFeat = dbFeat[:rv.whole_test_set.dbStruct.numDb].astype('float32')
 
     print('====> Building faiss index')
-    faiss_index = faiss.IndexFlatL2(pool_size)
-    faiss_index.add(dbFeat)
+    # res = faiss.StandardGpuResources()  # use a single GPU
+    # build a flat (CPU) index
+    index_flat = faiss.IndexFlatL2(pool_size)
+    # make it into a gpu index
+    # gpu_index_flat = faiss.index_cpu_to_gpu(res, 0, index_flat)
+    # add vectors to the index
+    index_flat.add(dbFeat)
+
+    # faiss_index = faiss.IndexFlatL2(pool_size)
+    # faiss_index.add(dbFeat)
 
     print('====> Calculating recall @ N')
     n_values = [1, 5, 10, 20]
     if opt.dataset.lower() == 'tokyo247':
         n_values = [10, 50, 100, 200]
 
-    _, predictions = faiss_index.search(qFeat, max(n_values))
+    _, predictions = index_flat.search(qFeat, max(n_values))
     predictionNew = []
     if opt.dataset.lower() == 'tokyo247':
         for idx, pred in enumerate(predictions):
