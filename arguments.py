@@ -6,6 +6,7 @@ import argparse
 
 parser = argparse.ArgumentParser(description='PlaceRecognitionTrainParameters')
 parser.add_argument('--mode', type=str, default='train', help='Mode', choices=['train', 'cluster', 'test'])
+parser.add_argument('--saveDecs',  action='store_true', help='whether to save descriptors to files.')
 parser.add_argument('--batchSize', type=int, default=3,
                     help='Number of triplets (query, pos, negs). Each triplet consists of 12 images.')
 parser.add_argument('--cacheBatchSize', type=int, default=24, help='Batch size for caching and testing')
@@ -36,7 +37,7 @@ parser.add_argument('--evalEvery', type=int, default=1,
                     help='Do a validation set run, and save, every N epochs.')
 parser.add_argument('--patience', type=int, default=20, help='Patience for early stopping. 0 is off.')
 parser.add_argument('--dataset', type=str, default='pittsburgh',
-                    help='Dataset to use', choices=['pittsburgh', 'tokyo247', 'highway', 'GB'])
+                    help='Dataset to use', choices=['pittsburgh', 'tokyo247', 'highway', 'GB', 'multimodal'])
 parser.add_argument('--arch', type=str, default='resnet18',
                     help='basenetwork to use', choices=['vgg16', 'alexnet', 'resnet18', 'resnet34', 'resnet50'])
 parser.add_argument('--pooling', type=str, default='netvlad', help='type of pooling to use',

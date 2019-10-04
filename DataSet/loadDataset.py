@@ -11,6 +11,8 @@ def loadDataSet(mode, split, whichdataset, threads, cacheBatchSize, margin):
         from DataSet import HighwayTrain as dataset
     elif whichdataset == 'gb':
         from DataSet import GBTrain as dataset
+    elif whichdataset =='multimodal':
+        from DataSet import Multimodal as dataset
     else:
         raise Exception('Unknown dataset')
 

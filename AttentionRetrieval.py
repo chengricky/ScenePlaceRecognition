@@ -27,6 +27,7 @@ import warnings
 import arguments
 import TestScript
 import TrainScript
+import GenerateDecs
 
 
 def get_clusters(cluster_set):
@@ -137,7 +138,7 @@ if __name__ == "__main__":
     print(opt)
     rv.set_opt(opt)
 
-    ## desinate the device (CUDA) to train
+    # designate the device (CUDA) to train
     if not torch.cuda.is_available():
         raise Exception("No GPU found, program terminated")
     device = torch.device("cuda")
@@ -153,15 +154,12 @@ if __name__ == "__main__":
                                 opt.threads, opt.cacheBatchSize, opt.margin)
     rv.set_dataset(train_set, whole_train_set, whole_training_data_loader, whole_test_set, dataset)
 
-    ## 构造网络模型
     print('===> Building model')
     model, encoder_dim, hook_dim = netavlad.get_netavlad_model(opt=opt, train_set=train_set,
                                                                whole_test_set=whole_test_set,
                                                                middleAttention=False)
-
     isParallel = False
     if opt.nGPU > 1 and torch.cuda.device_count() > 1:
-        # torch.distributed.init_process_group(backend="nccl", init_method='file:///mnt/lustre/chengruiqi/sharedfile', rank=0, world_size=4)
         print('Available GPU num = ', torch.cuda.device_count())
 
         model.encoder = nn.parallel.DataParallel(model.encoder)
@@ -169,21 +167,17 @@ if __name__ == "__main__":
             model.attention = nn.parallel.DataParallel(model.attention)
         if opt.mode.lower() != 'cluster':
             model.pool = nn.parallel.DataParallel(model.pool)
-            # model = nn.parallel.DataParallel(model)
-        # else:
-        #     model.encoder = nn.parallel.DataParallel(model.encoder)
         isParallel = True
 
-    ## 读入预先训练结果
+    # Read the previous training results
     if opt.resume:
         model, start_epoch, best_metric = loadCkpt.loadckpt(opt.ckpt.lower(), opt.resume, opt.start_epoch,
                                                             opt.mode.lower(), opt, opt.nGPU, device, model)
     if not opt.resume:
         model = model.to(device)
-
     rv.set_model(model, encoder_dim, hook_dim)
 
-    ## 定义优化器和损失函数
+    # Define Optimizer and Loss Functions
     if opt.mode.lower() == 'train':
         if opt.optim.upper() == 'ADAM':
             optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()),
@@ -194,9 +188,7 @@ if __name__ == "__main__":
             optimizer = optim.SGD(filter(lambda p: p.requires_grad, model.parameters()),
                                   lr=opt.lr, momentum=opt.momentum, weight_decay=opt.weightDecay)
             scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=opt.lrStep, gamma=opt.lrGamma)
-            # scheduler = optim.lr_scheduler.ExponentialLR(optimizer, opt.lrGamma)
             rv.set_optimizer(optimizer)
-
         else:
             raise ValueError('Unknown optimizer: ' + opt.optim)
 
@@ -204,11 +196,14 @@ if __name__ == "__main__":
         criterion = nn.TripletMarginLoss(margin=opt.margin ** 0.5, p=2, size_average=False).to(device)  # reduction='sum'
         rv.set_criterion(criterion)
 
-    ## 执行test/cluster/train操作
+    # Execute test/cluster/train
     if opt.mode.lower() == 'test':
         print('===> Running evaluation step')
-        epoch = 1
-        recalls = TestScript.test(rv, opt, epoch, write_tboard=False)
+        if opt.saveDecs:
+            GenerateDecs.generate(rv, opt, '/localresearch/PreciseLocalization/Dataset/YuQuanMultimodal/Gate-T3/')
+        else:
+            epoch = 1
+            recalls = TestScript.test(rv, opt, epoch, write_tboard=False)
 
     elif opt.mode.lower() == 'cluster':
         print('===> Calculating descriptors and clusters')

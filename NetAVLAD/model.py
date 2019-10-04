@@ -9,6 +9,8 @@ from os.path import join, exists
 from NetAVLAD import netvlad
 from NetAVLAD import attention as delfModel
 
+import numpy as np
+
 
 class Flatten(nn.Module):
     def forward(self, input):
@@ -80,13 +82,18 @@ def baseResNet(type=50, numTrain=2):
     return layers
 
 
+hook_features = []
+
+
+def get_hook(module, input, output):
+    hook_features.append(np.squeeze(output.data.cpu().numpy()))
+
+
 def get_netavlad_model(opt, train_set, whole_test_set, middleAttention):
 
     pretrained = not opt.fromscratch
     arch = opt.arch.lower()
     mode = opt.mode.lower()
-    numTrain = opt.numTrain
-    withAttention = opt.withAttention
     dataPath = opt.dataPath
     pooling = opt.pooling.lower()
     resume = opt.resume
@@ -98,35 +105,37 @@ def get_netavlad_model(opt, train_set, whole_test_set, middleAttention):
 
     if arch == 'alexnet':
         encoder_dim = 256
-        hook_layer = 6 #TODO fake value, to be determine
-        layers = baseAlexNet(pretrained=pretrained, numTrain=numTrain)
+        hook_layer = 6 # TODO fake value, to be determine
+        layers = baseAlexNet(pretrained=pretrained, numTrain=opt.numTrain)
     elif arch == 'vgg16':
         encoder_dim = 512
-        hook_layer = 15 # vgg16-conv3
+        hook_layer = 15 # vgg16-conv3(pooling之前的relu层，0-base)
         hook_dim = 256
-        layers = baseVGG16(pretrained=pretrained, numTrain=numTrain)
+        layers = baseVGG16(pretrained=pretrained, numTrain=opt.numTrain)
     elif arch == 'resnet18':
         encoder_dim = 512
         hook_layer = 2
-        layers = baseResNet(type=18, numTrain=numTrain)
+        layers = baseResNet(type=18, numTrain=opt.numTrain)
     elif arch == 'resnet34':
         encoder_dim = 512
         hook_layer = 2
-        layers = baseResNet(type=34, numTrain=numTrain)
+        layers = baseResNet(type=34, numTrain=opt.numTrain)
     elif arch == 'resnet50':
         encoder_dim = 2048
         hook_layer = 2
-        layers = baseResNet(type=50, numTrain=numTrain)
+        layers = baseResNet(type=50, numTrain=opt.numTrain)
     else:
         raise Exception('Unknown architecture')
     if mode == 'cluster':  # and opt.vladv2 == False #TODO add v1 v2 switching as flag
         layers.append(L2Norm())
 
-    encoder = nn.Sequential(*layers)
+    # layers[hook_layer].register_forward_hook(get_hook)
+
+    encoder = nn.Sequential(*layers)    # 参数数目不定时，使用*号作为可变参数列表，就可以在方法内对参数进行调用。
     model = nn.Module()
     model.add_module('encoder', encoder)
 
-    if withAttention:
+    if opt.withAttention:
         delf = delfModel.DELF(numc_featmap=encoder_dim, remain=remain)
         delf.init()
         model.add_module('attention', delf)
@@ -135,8 +144,7 @@ def get_netavlad_model(opt, train_set, whole_test_set, middleAttention):
             delf_mid.init()
             model.add_module('attention_mid', delf_mid)
 
-
-    ### 初始化model中的pooling模块
+    # 初始化model中的pooling模块
     if mode != 'cluster':
         if pooling == 'netvlad':
             net_vlad = netvlad.NetVLAD(num_clusters=num_clusters, dim=encoder_dim, vladv2=vladv2)

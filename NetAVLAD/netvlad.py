@@ -66,12 +66,8 @@ class NetVLAD(nn.Module):
             self.centroids = nn.Parameter(torch.from_numpy(clsts))
             del clsts, dsSq
 
-            self.conv.weight = nn.Parameter(
-                (2.0 * self.alpha * self.centroids).unsqueeze(-1).unsqueeze(-1)
-            )
-            self.conv.bias = nn.Parameter(
-                - self.alpha * self.centroids.norm(dim=1)
-            )
+            self.conv.weight = nn.Parameter((2.0 * self.alpha * self.centroids).unsqueeze(-1).unsqueeze(-1))
+            self.conv.bias = nn.Parameter(- self.alpha * self.centroids.norm(dim=1))
 
     def forward(self, x):
         N, C = x.shape[:2]
