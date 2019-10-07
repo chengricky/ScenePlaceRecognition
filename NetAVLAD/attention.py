@@ -4,7 +4,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-
 # The attention_type determines whether the attention based feature aggregation
 # is performed on the L2-normalized feature map or on the default feature map
 # where L2-normalization is not applied. Note that in both cases, attention
@@ -38,7 +37,7 @@ class DELF(nn.Module):
         self.attention_type = attention_type
         self.attention_nonlinear = attention_nonlinear
         self.conv1 = nn.Conv2d(in_channels=numc_featmap, out_channels=numc_featmap//2,
-                               kernel_size=kernel, dilation=1) #512
+                               kernel_size=kernel, dilation=1) # 512
         self.relu = nn.ReLU()
         self.conv2 = nn.Conv2d(in_channels=numc_featmap//2, out_channels=1, kernel_size=kernel)
         self.softplus = nn.Softplus()
@@ -57,37 +56,28 @@ class DELF(nn.Module):
         self.weight_init(self.conv1)
         self.weight_init(self.conv2)
 
-
-    def perform_attention(self, attention_feature_map, feature_map):
-        out = self.conv1(feature_map)
-        out = self.relu(out)
-        attention_score = self.conv2(out)
-
-        if self.attention_nonlinear not in _SUPPORTED_ATTENTION_NONLINEARITY:
-            raise ValueError('Unknown attention non-linearity.')
-        if self.attention_nonlinear == 'softplus':
-            attention_prob = self.softplus(attention_score)
-            attention_feat = torch.mul(attention_feature_map,
-                                       attention_prob.expand(-1, attention_feature_map.shape[1], -1, -1))
-
-        return attention_feat, attention_prob, attention_score
-
-    def forward(self, feature_map):
-        """
-        Args:
-            feature_map: A tensor of size [batch, height, width, channels]. Usually it
-                corresponds to the output feature map of a fully-convolutional network.
-        """
+    def forward(self, x):
 
         if self.attention_type not in _SUPPORTED_ATTENTION_TYPES:
             raise ValueError('Unknown attention_type.')
         if self.attention_type == 'use_l2_normalized_feature':
-            attention_feature_map = F.normalize(feature_map, p=2, dim=3)
+            attention_feature_map = F.normalize(x, p=2, dim=3)
         elif self.attention_type == 'use_default_input_feature':
-            attention_feature_map = feature_map
+            attention_feature_map = x
 
-        attention_outputs = self.perform_attention(attention_feature_map, feature_map)
-        attention_feat, attention_prob, attention_score = attention_outputs
+        x = self.conv1(x)
+        x = self.relu(x)
+        x = self.conv2(x)
+
+        if self.attention_nonlinear not in _SUPPORTED_ATTENTION_NONLINEARITY:
+            raise ValueError('Unknown attention non-linearity.')
+        if self.attention_nonlinear == 'softplus':
+            x = self.softplus(x)
+
+        x = torch.mul(attention_feature_map, x.expand(-1, attention_feature_map.shape[1], -1, -1))
+
+        # attention_outputs = self.perform_attention(attention_feature_map, feature_map)
+        # attention_feat, attention_prob, attention_score = attention_outputs
 
         # # send partial features to netVLAD
         # N, C, H, W = attention_prob.shape
@@ -100,5 +90,5 @@ class DELF(nn.Module):
         # indices = indices.expand(-1, Cf, -1)
         # feature_map_filtered = feature_map_flatten.gather(2, indices).unsqueeze(-1)
 
-        return attention_feat
+        return x
 

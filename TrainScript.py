@@ -6,6 +6,7 @@ from os.path import join
 import h5py
 from os import remove
 from torch.utils.data import DataLoader
+import time
 
 
 def train(rv, writer, opt, epoch):
@@ -24,18 +25,14 @@ def train(rv, writer, opt, epoch):
 
     for subIter in range(subsetN):
         print('====> Building Cache, subIter =', subIter)
+        start_time = time.time()
         rv.model.eval()
         rv.train_set.cache = join(opt.cachePath, rv.train_set.whichSet + '_feat_cache.hdf5')
         with h5py.File(rv.train_set.cache, mode='w') as h5:
             pool_size = rv.encoder_dim
             if opt.pooling.lower() == 'netvlad':
-                # if not opt.reduction:
                 pool_size *= opt.num_clusters
-                # else:
-                #     pool_size = 4096
-            h5feat = h5.create_dataset("features",
-                                       [len(rv.whole_train_set), pool_size],
-                                       dtype=np.float32)
+            h5feat = h5.create_dataset("features", [len(rv.whole_train_set), pool_size], dtype=np.float32)
             with torch.no_grad():
                 for iteration, (input, indices) in enumerate(rv.whole_training_data_loader, 1):
                     input = input.to(rv.device)
@@ -50,31 +47,35 @@ def train(rv, writer, opt, epoch):
                     h5feat[indices.detach().numpy(), :] = vlad_encoding.detach().cpu().numpy()
                     del input, vlad_encoding
 
-        sub_train_set = Subset(dataset=rv.train_set, indices=subsetIdx[subIter])
+        elapsed = time.time() - start_time
+        # used to store Tensors on the GPU
+        print('Allocated:', torch.cuda.memory_allocated())
+        # used on the CPU by pytorch (shown in nvidia-smi)
+        print('Cached:', torch.cuda.memory_cached())
+        torch.cuda.empty_cache()
+        print('====> Building Cache, Time =', int(elapsed), "s")
 
+        print('====> Loading Sub Training Dataset, subIter =', subIter)
+        start_time = time.time()
+        sub_train_set = Subset(dataset=rv.train_set, indices=subsetIdx[subIter])
         training_data_loader = DataLoader(dataset=sub_train_set, num_workers=opt.threads,
                                           batch_size=opt.batchSize, shuffle=True,
                                           collate_fn=rv.dataset.collate_fn, pin_memory=True)
-
-        print('Allocated:', torch.cuda.memory_allocated())
-        print('Cached:', torch.cuda.memory_cached())
-
         rv.model.train()
         for iteration, (query, positives, negatives,
                         negCounts, indices) in enumerate(training_data_loader, startIter):
-            # print('Start Iteration', iteration)
             # some reshaping to put query, pos, negs in a single (N, 3, H, W) tensor
             # where N = batchSize * (nQuery + nPos + nNeg)
             if query is None:
-                # print('EMPTY QUERY', iteration)
                 continue  # in case we get an empty batch
 
             B, C, H, W = query.shape
             nNeg = torch.sum(negCounts)
             input = torch.cat([query, positives, negatives])
-
+            del query, positives, negatives
             input = input.to(rv.device)
             image_encoding = rv.model.encoder(input)
+            del input
             if opt.withAttention:
                 image_encoding = rv.model.attention(image_encoding)
                 vlad_encoding = rv.model.pool(image_encoding)
@@ -84,9 +85,9 @@ def train(rv, writer, opt, epoch):
                 del image_encoding
 
             vladQ, vladP, vladN = torch.split(vlad_encoding, [B, B, nNeg])
+            del vlad_encoding
 
             rv.optimizer.zero_grad()
-
             # calculate loss for each Query, Positive, Negative triplet
             # due to potential difference in number of negatives have to
             # do it per query, per negative
@@ -95,12 +96,11 @@ def train(rv, writer, opt, epoch):
                 for n in range(negCount):
                     negIx = (torch.sum(negCounts[:i]) + n).item()
                     loss += rv.criterion(vladQ[i:i + 1], vladP[i:i + 1], vladN[negIx:negIx + 1])
+            del vladQ, vladP, vladN
 
             loss /= nNeg.float().to(rv.device)  # normalise by actual number of negatives
             loss.backward()
             rv.optimizer.step()
-            del input, vlad_encoding, vladQ, vladP, vladN
-            del query, positives, negatives
 
             batch_loss = loss.item()
             epoch_loss += batch_loss
@@ -120,6 +120,9 @@ def train(rv, writer, opt, epoch):
         rv.optimizer.zero_grad()
         torch.cuda.empty_cache()
         remove(rv.train_set.cache)  # delete HDF5 cache
+
+        elapsed = time.time() - start_time
+        print('====> Training Time =', int(elapsed), "s")
 
     avg_loss = epoch_loss / nBatches
 

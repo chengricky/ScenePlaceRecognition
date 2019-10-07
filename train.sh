@@ -5,7 +5,8 @@ python AttentionRetrieval.py \
 --arch=vgg16 \
 --numTrain=5 \
 --weightDecay=0.01 \
---cacheBatchSize=36 \
---batchSize=4 \
+--cacheBatchSize=72 \
+--batchSize=5 \
 --withAttention \
---vladv2
+--vladv2 \
+--threads=4
