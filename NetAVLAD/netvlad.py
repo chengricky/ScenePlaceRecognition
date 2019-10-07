@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from sklearn.neighbors import NearestNeighbors
 import numpy as np
+import faiss
 
 def performPCA(data, k=4096):
     # preprocess the data
@@ -36,13 +37,13 @@ class NetVLAD(nn.Module):
         """
         super(NetVLAD, self).__init__()
         self.num_clusters = num_clusters
-        self.dim = dim
-        self.alpha = 0
+        # self.dim = dim
+        # self.alpha = 0
         self.vladv2 = vladv2
         self.normalize_input = normalize_input
         self.conv = nn.Conv2d(dim, num_clusters, kernel_size=(1, 1), bias=vladv2)#environvladv2
-        self.centroids = nn.Parameter(torch.rand(num_clusters, dim))
-        self.reduction = reduction
+        # self.centroids = nn.Parameter(torch.rand(num_clusters, dim))
+        # self.reduction = reduction
 
     def init_params(self, clsts, traindescs):
         #TODO replace numpy ops with pytorch ops
@@ -50,24 +51,24 @@ class NetVLAD(nn.Module):
             clstsAssign = clsts / np.linalg.norm(clsts, axis=1, keepdims=True)
             dots = np.dot(clstsAssign, traindescs.T)
             dots.sort(0)
-            dots = dots[::-1, :] # sort, descending
+            dots = dots[::-1, :] # sort, descending (::-1-->reverse)
 
-            self.alpha = (-np.log(0.01) / np.mean(dots[0,:] - dots[1,:])).item()
+            alpha = (-np.log(0.01) / np.mean(dots[0,:] - dots[1,:])).item()
             self.centroids = nn.Parameter(torch.from_numpy(clsts))
-            self.conv.weight = nn.Parameter(torch.from_numpy(self.alpha*clstsAssign).unsqueeze(2).unsqueeze(3))
+            self.conv.weight = nn.Parameter(torch.from_numpy(alpha*clstsAssign).unsqueeze(2).unsqueeze(3))
             self.conv.bias = None
         else:
             knn = NearestNeighbors(n_jobs=-1) #TODO faiss?
             knn.fit(traindescs)
             del traindescs
-            dsSq = np.square(knn.kneighbors(clsts, 2)[1])
+            dsSq = np.square(knn.kneighbors(clsts, 2)[0])#[1]-->[0]?
             del knn
-            self.alpha = (-np.log(0.01) / np.mean(dsSq[:,1] - dsSq[:,0])).item()
+            alpha = (-np.log(0.01) / np.mean(dsSq[:,1] - dsSq[:,0])).item()
             self.centroids = nn.Parameter(torch.from_numpy(clsts))
             del clsts, dsSq
 
-            self.conv.weight = nn.Parameter((2.0 * self.alpha * self.centroids).unsqueeze(-1).unsqueeze(-1))
-            self.conv.bias = nn.Parameter(- self.alpha * self.centroids.norm(dim=1))
+            self.conv.weight = nn.Parameter((2.0 * alpha * self.centroids).unsqueeze(-1).unsqueeze(-1))
+            self.conv.bias = nn.Parameter(- alpha * self.centroids.norm(dim=1))
 
     def forward(self, x):
         N, C = x.shape[:2]

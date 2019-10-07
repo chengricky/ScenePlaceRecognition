@@ -42,7 +42,6 @@ class DELF(nn.Module):
         self.relu = nn.ReLU()
         self.conv2 = nn.Conv2d(in_channels=numc_featmap//2, out_channels=1, kernel_size=kernel)
         self.softplus = nn.Softplus()
-        #self.conv3 = nn.Conv2d(1, num_classes, 1)
         self.remain = remain
 
     def weight_init(self, m):
@@ -59,8 +58,7 @@ class DELF(nn.Module):
         self.weight_init(self.conv2)
 
 
-    def _PerformAttention(self, attention_feature_map, feature_map):
-
+    def perform_attention(self, attention_feature_map, feature_map):
         out = self.conv1(feature_map)
         out = self.relu(out)
         attention_score = self.conv2(out)
@@ -69,10 +67,8 @@ class DELF(nn.Module):
             raise ValueError('Unknown attention non-linearity.')
         if self.attention_nonlinear == 'softplus':
             attention_prob = self.softplus(attention_score)
-            attention_feat = []
-            #attention_feat = torch.mul(attention_feature_map, attention_prob)
-            #attention_feat = torch.mean(torch.mul(attention_feature_map, attention_prob), (1, 2))
-            #attention_feat = torch.unsqueeze(torch.unsqueeze(attention_feat, 1), 2)
+            attention_feat = torch.mul(attention_feature_map,
+                                       attention_prob.expand(-1, attention_feature_map.shape[1], -1, -1))
 
         return attention_feat, attention_prob, attention_score
 
@@ -82,7 +78,6 @@ class DELF(nn.Module):
             feature_map: A tensor of size [batch, height, width, channels]. Usually it
                 corresponds to the output feature map of a fully-convolutional network.
         """
-        #end_points = {}
 
         if self.attention_type not in _SUPPORTED_ATTENTION_TYPES:
             raise ValueError('Unknown attention_type.')
@@ -90,29 +85,20 @@ class DELF(nn.Module):
             attention_feature_map = F.normalize(feature_map, p=2, dim=3)
         elif self.attention_type == 'use_default_input_feature':
             attention_feature_map = feature_map
-        #end_points['attention_feature_map'] = attention_feature_map
 
-        attention_outputs = self._PerformAttention(attention_feature_map, feature_map)
-        _, attention_prob, attention_score = attention_outputs
+        attention_outputs = self.perform_attention(attention_feature_map, feature_map)
+        attention_feat, attention_prob, attention_score = attention_outputs
 
-        N, C, H, W = attention_prob.shape
-        #print(N, C, H, W)
-        attention_score_flatten = attention_prob.view(N, C, -1)
-        values, indices = torch.topk(attention_score_flatten, int(H*W*self.remain))
+        # # send partial features to netVLAD
+        # N, C, H, W = attention_prob.shape
+        # attention_score_flatten = attention_prob.view(N, C, -1)
+        # values, indices = torch.topk(attention_score_flatten, int(H*W*self.remain))
+        #
+        # Nf, Cf, Hf, Wf = feature_map.shape
+        # feature_map_flatten = feature_map.view(Nf, Cf, -1)
+        #
+        # indices = indices.expand(-1, Cf, -1)
+        # feature_map_filtered = feature_map_flatten.gather(2, indices).unsqueeze(-1)
 
-        Nf, Cf, Hf, Wf = feature_map.shape
-        feature_map_flatten = feature_map.view(Nf, Cf, -1)
-        #feature_map_filtered_flatten = torch.zeros(Nf, Cf, int(H*W*self.remain))
-
-        indices = indices.expand(-1, Cf, -1)
-        feature_map_filtered = feature_map_flatten.gather(2, indices).unsqueeze(-1)
-        #.view(Nf, Cf, 20, -1)
-
-        # for i in enumerate():
-        #     feature_map_filtered_flatten[i, :, :] = \
-        #         torch.index_select(feature_map_flatten[i, :, :], -1, indices[i, 0, :])
-        # #print(feature_map_filtered_flatten.shape)
-        # feature_map_filtered = feature_map_filtered_flatten.view(Nf, Cf, 20, -1)
-
-        return feature_map_filtered
+        return attention_feat
 

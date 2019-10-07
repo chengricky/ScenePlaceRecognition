@@ -185,8 +185,22 @@ if __name__ == "__main__":
             rv.set_optimizer(optimizer)
 
         elif opt.optim.upper() == 'SGD':
-            optimizer = optim.SGD(filter(lambda p: p.requires_grad, model.parameters()),
-                                  lr=opt.lr, momentum=opt.momentum, weight_decay=opt.weightDecay)
+            # set the learning rate of attention parameters as 10 times of other parameters
+            if opt.withAttention:
+                # attention_params = list(map(id, model.attention.parameters()))
+                # print(list(model.attention.parameters()))
+                attention_train_params = filter(lambda p: p.requires_grad, model.attention.parameters())
+                base_params = filter(lambda p: p.requires_grad, model.parameters())
+                base_train_params = list(set(base_params)^set(attention_train_params))
+                optimizer = optim.SGD([
+                    {'params': base_train_params, 'lr': opt.lr, 'momentum': opt.momentum,
+                     'weight_decay': opt.weightDecay},
+                    {'params': attention_train_params, 'lr': opt.lr*10, 'momentum': opt.momentum,
+                     'weight_decay': opt.weightDecay},
+                ])
+            else:
+                optimizer = optim.SGD(filter(lambda p: p.requires_grad, model.parameters()),
+                                      lr=opt.lr, momentum=opt.momentum, weight_decay=opt.weightDecay)
             scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=opt.lrStep, gamma=opt.lrGamma)
             rv.set_optimizer(optimizer)
         else:

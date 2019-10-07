@@ -5,7 +5,7 @@ checkpoints*/
 ckpt_*/
 *.pth.tar
 *.pth
-
+*.sh
 
 # Created by .ignore support plugin (hsz.mobi)
 ### Python template

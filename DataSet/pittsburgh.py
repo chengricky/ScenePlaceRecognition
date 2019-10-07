@@ -17,7 +17,7 @@ from torchvision.transforms import ColorJitter
 import yaml
 import faiss
 
-root_dir = '/data/Pittsburgh/'
+root_dir = '/home/ruiqi/netVLADdatasets/Pittsburgh/'
 if not exists(root_dir):
     raise FileNotFoundError('root_dir is hardcoded, please adjust to point to Pittsburth dataset')
 
@@ -31,7 +31,7 @@ def data_aug(img, configs):
     name2func = {
         # 'blur': lambda img_in: gaussian_blur(img_in, configs['blur_range']),
         # Randomly change the brightness, contrast and saturation of an image.
-        'jitter': lambda img_in: np.asarray(jitter(img_in)),
+        'jitter': lambda img_in: jitter(img_in), # np.asarray(jitter(img_in)),
         # 'noise': lambda img_in: add_noise(img_in),
         'none': lambda img_in: img_in,
         # 'sp_gaussian_noise': lambda img_in: additive_gaussian_noise(img_in, configs['sp_gaussian_range']),
@@ -45,10 +45,12 @@ def data_aug(img, configs):
     }
 
     # ['random_rotate_img','jitter','motion_blur','none']
-    if len(configs['augment_classes']) > configs['augment_num']:
+    if configs['augment_num'] < 0:
+        return img
+    elif len(configs['augment_classes']) > configs['augment_num']:
         augment_classes = np.random.choice(configs['augment_classes'], configs['augment_num'],
                                            False, p=configs['augment_classes_weight'])
-    elif 0 < len(configs['augment_classes']) <= configs['augment_num']:
+    elif len(configs['augment_classes']) <= configs['augment_num']:
         augment_classes = configs["augment_classes"]
     else:
         return img

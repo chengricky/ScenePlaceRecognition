@@ -7,25 +7,26 @@ from PIL import Image
 
 def random_rotate(img, pts, rot_ang_min, rot_ang_max):
     # 图像和特征点同时旋转随机角度
-    h,w=img.shape[0],img.shape[1]
-    degree=np.random.uniform(rot_ang_min,rot_ang_max)
-    R=cv2.getRotationMatrix2D((w/2,h/2), degree, 1)
-    img=cv2.warpAffine(img,R,(w, h),flags=cv2.INTER_LINEAR,borderMode=cv2.BORDER_CONSTANT,borderValue=0)
+    h, w = img.shape[0], img.shape[1]
+    degree = np.random.uniform(rot_ang_min,rot_ang_max)
+    R = cv2.getRotationMatrix2D((w/2,h/2), degree, 1)
+    img = cv2.warpAffine(img,R,(w, h),flags=cv2.INTER_LINEAR,borderMode=cv2.BORDER_CONSTANT,borderValue=0)
 
     pts=np.concatenate([pts,np.ones([pts.shape[0],1])],1) # n,3
     last_row=np.asarray([[0,0,1]],np.float32)
     pts=np.matmul(pts, np.concatenate([R, last_row], 0).transpose())
 
-    return img, pts[:,:2]
+    return img, pts[:, :2]
 
 
 def random_rotate_img(img, rot_ang_min, rot_ang_max):
     # 图像旋转随机角度
+    img = np.array(img)
     h, w = img.shape[0], img.shape[1]
-    degree=np.random.uniform(rot_ang_min,rot_ang_max)
-    R=cv2.getRotationMatrix2D((w/2,h/2), degree, 1)
-    img=cv2.warpAffine(img,R,(w, h),flags=cv2.INTER_LINEAR,borderMode=cv2.BORDER_CONSTANT,borderValue=0)
-    return img
+    degree = np.random.uniform(rot_ang_min, rot_ang_max)
+    R = cv2.getRotationMatrix2D((w/2, h/2), degree, 1)
+    img = cv2.warpAffine(img, R, (w, h), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT, borderValue=0)
+    return Image.fromarray(img)
 
 
 def crop_or_pad_to_fixed_size(img, pts=None, ratio=1.0):
@@ -157,7 +158,7 @@ def additive_shade(img, nb_ellipses=20, transparency_range=(-0.5, 0.8),
 
 def motion_blur(img, max_kernel_size=10):
     # Either vertial, hozirontal or diagonal blur
-    img=img.astype(np.float32)
+    img = np.array(img).astype(np.float32)
     mode = np.random.choice(['h', 'v', 'diag_down', 'diag_up'])
     ksize = np.random.randint(0, (max_kernel_size+1)/2)*2 + 1  # make sure is odd
     center = int((ksize-1)/2)
@@ -176,12 +177,12 @@ def motion_blur(img, max_kernel_size=10):
     kernel *= gaussian
     kernel /= np.sum(kernel)
     img = cv2.filter2D(img, -1, kernel)
-    img=np.clip(img,0,255)
-    return img.astype(np.uint8)
+    img = np.clip(img, 0, 255)
+    return Image.fromarray(img.astype(np.uint8))
 
 
 def resize_blur(img, max_ratio=0.15):
-    h,w,_=img.shape
-    ratio_w,ratio_h=np.random.uniform(max_ratio,1.0,2)
-    return cv2.resize(cv2.resize(img,(int(w*ratio_w),int(h*ratio_h)),interpolation=cv2.INTER_LINEAR),
-                      (w,h),interpolation=cv2.INTER_LINEAR)
+    h, w, _ = img.shape
+    ratio_w, ratio_h = np.random.uniform(max_ratio, 1.0, 2)
+    return cv2.resize(cv2.resize(img, (int(w*ratio_w), int(h*ratio_h)), interpolation=cv2.INTER_LINEAR),
+                      (w, h), interpolation=cv2.INTER_LINEAR)
