@@ -61,7 +61,7 @@ class DELF(nn.Module):
         if self.attention_type not in _SUPPORTED_ATTENTION_TYPES:
             raise ValueError('Unknown attention_type.')
         if self.attention_type == 'use_l2_normalized_feature':
-            attention_feature_map = F.normalize(x, p=2, dim=3)
+            attention_feature_map = F.normalize(x, p=2, dim=1)
         elif self.attention_type == 'use_default_input_feature':
             attention_feature_map = x
 

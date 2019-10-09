@@ -7,7 +7,7 @@ import faiss
 def test(rv, opt, epoch=0, write_tboard=False):
     # TODO what if features dont fit in memory?
     test_data_loader = DataLoader(dataset=rv.whole_test_set, num_workers=opt.threads,
-                                  batch_size=opt.cacheBatchSize, shuffle=False,
+                                  batch_size=opt.cacheBatchSize//2, shuffle=False,
                                   pin_memory=True)
 
     rv.model.eval()
@@ -20,17 +20,22 @@ def test(rv, opt, epoch=0, write_tboard=False):
         for iteration, (input, indices) in enumerate(test_data_loader, 1):
             input = input.to(rv.device)
             image_encoding = rv.model.encoder(input)
+            del input
             if opt.withAttention:
-                image_encoding_a = rv.model.attention(image_encoding)
-                vlad_encoding = rv.model.pool(image_encoding_a)
+                image_encoding = rv.model.attention(image_encoding)
+                vlad_encoding = rv.model.pool(image_encoding)
+                del image_encoding
             else:
                 vlad_encoding = rv.model.pool(image_encoding)
+                del image_encoding
 
             dbFeat[indices.detach().numpy(), :] = vlad_encoding.detach().cpu().numpy()
             if iteration % 50 == 0 or len(test_data_loader) <= 10:
                 print("==> Batch ({}/{})".format(iteration, len(test_data_loader)), flush=True)
 
-            del input, image_encoding, vlad_encoding
+            del vlad_encoding
+            # torch.cuda.empty_cache()
+
     del test_data_loader
 
     # extracted for both db and query, now split in own sets

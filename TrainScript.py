@@ -60,7 +60,8 @@ def train(rv, writer, opt, epoch):
         sub_train_set = Subset(dataset=rv.train_set, indices=subsetIdx[subIter])
         training_data_loader = DataLoader(dataset=sub_train_set, num_workers=opt.threads,
                                           batch_size=opt.batchSize, shuffle=True,
-                                          collate_fn=rv.dataset.collate_fn, pin_memory=True)
+                                          collate_fn=rv.dataset.collate_fn, pin_memory=True,
+                                          drop_last=True)
         rv.model.train()
         for iteration, (query, positives, negatives,
                         negCounts, indices) in enumerate(training_data_loader, startIter):
@@ -73,8 +74,7 @@ def train(rv, writer, opt, epoch):
             nNeg = torch.sum(negCounts)
             input = torch.cat([query, positives, negatives])
             del query, positives, negatives
-            input = input.to(rv.device)
-            image_encoding = rv.model.encoder(input)
+            image_encoding = rv.model.encoder(input.to(rv.device))
             del input
             if opt.withAttention:
                 image_encoding = rv.model.attention(image_encoding)

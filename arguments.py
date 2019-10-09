@@ -35,7 +35,7 @@ parser.add_argument('--ckpt', type=str, default='latest',
                     help='Resume from latest or best checkpoint.', choices=['latest', 'best'])
 parser.add_argument('--evalEvery', type=int, default=1,
                     help='Do a validation set run, and save, every N epochs.')
-parser.add_argument('--patience', type=int, default=20, help='Patience for early stopping. 0 is off.')
+parser.add_argument('--patience', type=int, default=5, help='Patience for early stopping. 0 is off.')
 parser.add_argument('--dataset', type=str, default='pittsburgh',
                     help='Dataset to use', choices=['pittsburgh', 'tokyo247', 'highway', 'GB', 'multimodal'])
 parser.add_argument('--arch', type=str, default='resnet18',
