@@ -45,6 +45,10 @@ def loadckpt(ckpt, resume, start_epoch, mode, optLoaded, nGPU, device, model):
             state_dict_pool = {str.replace(k, 'pool.', ''): v for k, v in state_dict_pool.items()}
             model.pool.load_state_dict(state_dict_pool, strict=True)
 
+            state_dict_pool = {k: v for k, v in state_dict.items() if 'attention' in k}
+            state_dict_pool = {str.replace(k, 'attention.', ''): v for k, v in state_dict_pool.items()}
+            model.attention.load_state_dict(state_dict_pool, strict=True)
+
         model = model.to(device)
         # if opt.mode == 'train':
         #     optimizer.load_state_dict(checkpoint['optimizer'])

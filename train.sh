@@ -2,6 +2,8 @@ python AttentionRetrieval.py \
 --dataset=pittsburgh \
 --mode=train \
 --savePath=ckpt_vgg16_pitts30_a \
+--resume=ckpt_vgg16_pitts30_a \
+--start-epoch=1 \
 --arch=vgg16 \
 --numTrain=5 \
 --weightDecay=0.01 \

@@ -2,7 +2,7 @@
   ########augmentation#########
   "augment_classes":["jitter","random_rotate_img","motion_blur","none"],
   "augment_classes_weight": [0.2,0.2,0.4,0.2],
-  "augment_num": 2,
+  "augment_num": -1,
 #  "add_background":true,
 
   "brightness":0.2,
