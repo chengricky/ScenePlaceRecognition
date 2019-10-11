@@ -1,8 +1,8 @@
 python AttentionRetrieval.py \
 --dataset=pittsburgh \
 --mode=test \
---savePath=ckpt_vgg16_pitts30_a \
---resume=ckpt_vgg16_pitts30_a \
+--savePath=ckpt_vgg16_pitts30_aug15_a \
+--resume=ckpt_vgg16_pitts30_aug15_a \
 --start-epoch=6 \
 --arch=vgg16 \
 --numTrain=5 \
@@ -10,5 +10,4 @@ python AttentionRetrieval.py \
 --cacheBatchSize=64 \
 --batchSize=4 \
 --withAttention \
---vladv2 \
 --threads=4

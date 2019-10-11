@@ -172,7 +172,8 @@ if __name__ == "__main__":
     # Read the previous training results
     if opt.resume:
         model, start_epoch, best_metric = loadCkpt.loadckpt(opt.ckpt.lower(), opt.resume, opt.start_epoch,
-                                                            opt.mode.lower(), opt, opt.nGPU, device, model)
+                                                            opt.mode.lower(), opt, opt.nGPU, device, model,
+                                                            opt.withAttention)
     if not opt.resume:
         model = model.to(device)
     rv.set_model(model, encoder_dim, hook_dim)
