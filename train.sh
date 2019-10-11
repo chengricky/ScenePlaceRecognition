@@ -1,12 +1,12 @@
 python AttentionRetrieval.py \
 --dataset=pittsburgh \
---mode=train \
+--mode=test \
 --savePath=ckpt_vgg16_pitts30_a \
 --resume=ckpt_vgg16_pitts30_a \
---start-epoch=1 \
+--start-epoch=6 \
 --arch=vgg16 \
 --numTrain=5 \
---weightDecay=0.01 \
+--weightDecay=0.001 \
 --cacheBatchSize=64 \
 --batchSize=4 \
 --withAttention \

@@ -7,7 +7,7 @@ import faiss
 def test(rv, opt, epoch=0, write_tboard=False):
     # TODO what if features dont fit in memory?
     test_data_loader = DataLoader(dataset=rv.whole_test_set, num_workers=opt.threads,
-                                  batch_size=opt.cacheBatchSize//2, shuffle=False,
+                                  batch_size=opt.cacheBatchSize, shuffle=False,
                                   pin_memory=True)
 
     rv.model.eval()
@@ -37,6 +37,7 @@ def test(rv, opt, epoch=0, write_tboard=False):
             # torch.cuda.empty_cache()
 
     del test_data_loader
+    torch.cuda.empty_cache()
 
     # extracted for both db and query, now split in own sets
     qFeat = dbFeat[rv.whole_test_set.dbStruct.numDb:].astype('float32')
