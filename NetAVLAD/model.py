@@ -16,6 +16,7 @@ class Flatten(nn.Module):
     def forward(self, input):
         return input.view(input.size(0), -1)
 
+
 class L2Norm(nn.Module):
     def __init__(self, dim=1):
         super().__init__()
@@ -23,6 +24,7 @@ class L2Norm(nn.Module):
 
     def forward(self, input):
         return F.normalize(input, p=2, dim=self.dim)
+
 
 def baseAlexNet(pretrained=True, numTrain=1):
     encoder = models.alexnet(pretrained=pretrained)
@@ -35,12 +37,16 @@ def baseAlexNet(pretrained=True, numTrain=1):
                 p.requires_grad = False
     return layers
 
+
 def baseVGG16(pretrained=False, numTrain=5):
     encoder = models.vgg16(pretrained=False)
     if pretrained is True:
         encoder.load_state_dict(torch.load('vgg16-397923af.pth'))
     # capture only feature part and remove last relu and maxpool
     layers = list(encoder.features.children())[:-2]
+    # print(len(layers))
+    # print(layers)
+    # input()
     if pretrained:
         if numTrain<=0:
             for l in layers:
@@ -52,6 +58,7 @@ def baseVGG16(pretrained=False, numTrain=5):
                 for p in l.parameters():
                     p.requires_grad = False
     return layers
+
 
 def baseResNet(type=50, numTrain=2):
     # loading resnet18 of trained on places365 as basenet
@@ -75,7 +82,24 @@ def baseResNet(type=50, numTrain=2):
         state_dict = {str.replace(k, 'module.', ''): v for k, v in checkpoint['state_dict'].items()}  # 去掉module.字样
         modelResNet.load_state_dict(state_dict)
     layers = list(modelResNet.children())[:-2]  # children()只包括了第一代儿子模块，get rid of the last two layers: avepool & fc
+    # print(layers)
+    # input()
     # 让最后1\2个block参与netVLAD训练
+    for l in layers[:-1*numTrain]:
+        for p in l.parameters():
+            p.requires_grad = False
+    return layers
+
+
+def baseMobileNet(type=2, numTrain=5):
+    import torchvision.models.mobilenet as mobilenet
+    model_file = 'Place365/mobilenet_v2_best.pth.tar'
+    modelMobileNet = mobilenet.MobileNetV2(num_classes=365)
+    checkpoint = torch.load(model_file, map_location=lambda storage, loc: storage)
+    state_dict = {str.replace(k, 'module.', ''): v for k, v in checkpoint['state_dict'].items()}  # 去掉module.字样
+    modelMobileNet.load_state_dict(state_dict)
+
+    layers = list(list(modelMobileNet.children())[0].children())
     for l in layers[:-1*numTrain]:
         for p in l.parameters():
             p.requires_grad = False
@@ -114,7 +138,7 @@ def get_netavlad_model(opt, train_set, whole_test_set, middleAttention):
         layers = baseVGG16(pretrained=pretrained, numTrain=opt.numTrain)
     elif arch == 'resnet18':
         encoder_dim = 512
-        hook_layer = 2
+        hook_layer = 4 # the output of the second block
         layers = baseResNet(type=18, numTrain=opt.numTrain)
     elif arch == 'resnet34':
         encoder_dim = 512
@@ -124,12 +148,17 @@ def get_netavlad_model(opt, train_set, whole_test_set, middleAttention):
         encoder_dim = 2048
         hook_layer = 2
         layers = baseResNet(type=50, numTrain=opt.numTrain)
+    elif arch == 'mobilenet':
+        encoder_dim = 1280
+        hook_layer = 2
+        layers = baseMobileNet(type=2, numTrain=opt.numTrain)
     else:
         raise Exception('Unknown architecture')
     if mode == 'cluster':  # and opt.vladv2 == False #TODO add v1 v2 switching as flag
         layers.append(L2Norm())
 
-    # layers[hook_layer].register_forward_hook(get_hook)
+    if opt.saveDecs:
+        layers[hook_layer].register_forward_hook(get_hook)
 
     encoder = nn.Sequential(*layers)    # 参数数目不定时，使用*号作为可变参数列表，就可以在方法内对参数进行调用。
     model = nn.Module()

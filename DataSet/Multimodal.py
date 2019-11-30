@@ -7,7 +7,7 @@ from PIL import Image
 
 from collections import namedtuple
 
-root_dir = '/localresearch/PreciseLocalization/Dataset/VLdataset_MST/Gate-T3/'
+root_dir = '/localresearch/PreciseLocalization/Dataset/VLdataset_MST/T3-Lib/'
 if not exists(root_dir):
     raise FileNotFoundError('root_dir is hardcoded, please adjust to point to Yuquan Multimodal dataset')
 

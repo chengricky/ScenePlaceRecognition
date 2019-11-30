@@ -1,8 +1,8 @@
 from os.path import join, isfile
 import torch
 
-def loadckpt(ckpt, resume, start_epoch, mode, optLoaded, nGPU, device, model, withAttention):
 
+def loadckpt(ckpt, resume, start_epoch, mode, optLoaded, nGPU, device, model, withAttention):
 
     if ckpt == 'latest':
         resume_ckpt = join(resume, 'checkpoint.pth.tar')

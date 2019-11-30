@@ -17,7 +17,9 @@ from torchvision.transforms import ColorJitter
 import yaml
 import faiss
 
-root_dir = '/home/ruiqi/netVLADdatasets/Pittsburgh/'
+# root_dir = '/home/ruiqi/netVLADdatasets/Pittsburgh/'
+root_dir = '/data/Pittsburgh/'
+
 if not exists(root_dir):
     raise FileNotFoundError('root_dir is hardcoded, please adjust to point to Pittsburth dataset')
 

@@ -1,5 +1,6 @@
 from torch.utils.data import DataLoader
 
+
 def loadDataSet(mode, split, whichdataset, threads, cacheBatchSize, margin):
 
     # Designate the dataset to train
@@ -9,8 +10,6 @@ def loadDataSet(mode, split, whichdataset, threads, cacheBatchSize, margin):
         from DataSet import tokyoTM as dataset
     elif whichdataset == 'highway':
         from DataSet import HighwayTrain as dataset
-    elif whichdataset == 'gb':
-        from DataSet import GBTrain as dataset
     elif whichdataset =='multimodal':
         from DataSet import Multimodal as dataset
     else:
@@ -20,9 +19,8 @@ def loadDataSet(mode, split, whichdataset, threads, cacheBatchSize, margin):
     if mode == 'train':
         # get all of the images
         whole_train_set = dataset.get_whole_training_set()
-        whole_training_data_loader = DataLoader(dataset=whole_train_set,
-                                                num_workers=threads, batch_size=cacheBatchSize,
-                                                shuffle=False, pin_memory=True)
+        whole_training_data_loader = DataLoader(dataset=whole_train_set, num_workers=threads,
+                                                batch_size=cacheBatchSize, shuffle=False, pin_memory=True)
         # get query-database pairs
         train_set = dataset.get_training_query_set(margin)
         print('====> Training set, query count:', len(train_set))

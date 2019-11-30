@@ -9,21 +9,25 @@ from os.path import isfile
 features_blobs = []
 netVLADlayer_input = []  # netVLAD分支的输入值
 
+
 def hook_feature(module, input, output):
     features_blobs.append(np.squeeze(output.data.cpu().numpy()))
 
+
 def hook_layer(module, input, output):
     netVLADlayer_input.append(output)
+
 
 def getPretrainedParams(model_file):
     # load object saved with torch.save() from a file
     # with funtion specifiying how to remap storage locations in the parameter list
     checkpoint = torch.load(model_file, map_location=lambda storage, loc: storage) #gpu->cpu, why?!
     # get rid of ‘module.’
-    state_dict = {str.replace(k, 'module.', ''): v for k,v in checkpoint['state_dict'].items()}
+    state_dict = {str.replace(k, 'module.', ''): v for k, v in checkpoint['state_dict'].items()}
     return state_dict
 
-# 构造场景识别/场景属性的resnet模型，并加载参数；同时增加netvlad分支所用的hook
+
+# 构造场景识别/场景属性的模型，并加载参数；同时增加netvlad分支所用的hook
 def loadSceneRecognitionModel(trainedNetVLADLayers):
     # this model has a last conv feature map as 14x14
     model_file = 'Place365/wideresnet18_places365.pth.tar'
@@ -42,6 +46,7 @@ def loadSceneRecognitionModel(trainedNetVLADLayers):
     model._modules.get(features_candidates[trainedNetVLADLayers]).register_forward_hook(hook_layer)
 
     return model
+
 
 # 导入训练过的resnet-netvlad模型
 def loadPlaceRecognitionEncoder(netVLADtrainNum):

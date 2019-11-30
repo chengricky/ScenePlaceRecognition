@@ -7,7 +7,7 @@ from NetAVLAD import model as mdl
 
 def generate(rv, opt, path_dir):
     numDb = rv.whole_test_set.dbStruct.numDb
-    subdir = ['database', 'query']
+    subdir = ['reference', 'query']
     test_data_loader = DataLoader(dataset=rv.whole_test_set, num_workers=opt.threads,
                                   batch_size=opt.cacheBatchSize, shuffle=False, pin_memory=True)
     size = None
@@ -19,8 +19,8 @@ def generate(rv, opt, path_dir):
             rgb = rgb.to(rv.device)
             image_encoding = rv.model.encoder(rgb)
             if opt.withAttention:
-                image_encoding_a = rv.model.attention(image_encoding)
-                vlad_encoding = rv.model.pool(image_encoding_a)
+                image_encoding = rv.model.attention(image_encoding)
+                vlad_encoding = rv.model.pool(image_encoding)
             else:
                 vlad_encoding = rv.model.pool(image_encoding)
 

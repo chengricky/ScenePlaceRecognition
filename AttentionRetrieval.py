@@ -1,33 +1,35 @@
-# Train the NetVLAD network
+"""
+Train the NetVLAD network with Attention module
+"""
+
 from __future__ import print_function
 
+import json
+import random
+import shutil
+import warnings
+from datetime import datetime
 from math import ceil
-import random, shutil, json
-from os.path import join, exists
 from os import makedirs
+from os.path import join, exists
 
+import faiss
+import h5py
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from tensorboardX import SummaryWriter
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import SubsetRandomSampler
 
-from datetime import datetime
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                
-import h5py
-import faiss
-
-from tensorboardX import SummaryWriter
-import numpy as np
-from NetAVLAD import model as netavlad                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      
-from DataSet import loadDataset                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         
-import loadCkpt
-
-import warnings
-import arguments
+import GenerateDecs
 import TestScript
 import TrainScript
-import GenerateDecs
+import arguments
+import loadCkpt
+from DataSet import loadDataset
+from NetAVLAD import model as netavlad
 
 
 def get_clusters(cluster_set):
@@ -88,8 +90,15 @@ def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
 
 
 class RunningVariables:
-    def __init__(self):
-        self.opt = 0
+    """Global variables to run the code.
+
+    This class assembles the running variables for training the model.
+
+    Attributes:
+        _opt: arguments obtained from the command line.
+    """
+    def __init__(self, _opt):
+        self.opt = _opt
         self.train_set = 0
         self.whole_train_set = 0
         self.whole_training_data_loader = 0
@@ -101,9 +110,6 @@ class RunningVariables:
         self.device = 0
         self.optimizer = None
         self.criterion = None
-
-    def set_opt(self, opt_):
-        self.opt = opt_
 
     def set_dataset(self, train_set_, whole_train_set_, whole_training_data_loader_, whole_test_set_, dataset_):
         self.train_set = train_set_
@@ -131,12 +137,10 @@ if __name__ == "__main__":
     # ignore warnings -- UserWarning: Loky-backed parallel loops cannot be called in a multiprocessing, setting n_jobs=1
     warnings.filterwarnings("ignore")
 
-    rv = RunningVariables()
-
     # get arguments from the json file or the command
     opt = arguments.get_args()
     print(opt)
-    rv.set_opt(opt)
+    rv = RunningVariables(opt)
 
     # designate the device (CUDA) to train
     if not torch.cuda.is_available():
@@ -149,14 +153,13 @@ if __name__ == "__main__":
     rv.set_device(device)
 
     print('===> Loading dataset(s)')
-    train_set, whole_train_set, whole_training_data_loader, whole_test_set, dataset = \
-        loadDataset.loadDataSet(opt.mode.lower(), opt.split.lower(), opt.dataset.lower(),
-                                opt.threads, opt.cacheBatchSize, opt.margin)
-    rv.set_dataset(train_set, whole_train_set, whole_training_data_loader, whole_test_set, dataset)
+    dataset_tuple = loadDataset.loadDataSet(opt.mode.lower(), opt.split.lower(), opt.dataset.lower(),
+                                            opt.threads, opt.cacheBatchSize, opt.margin)
+    rv.set_dataset(*dataset_tuple)
 
     print('===> Building model')
-    model, encoder_dim, hook_dim = netavlad.get_netavlad_model(opt=opt, train_set=train_set,
-                                                               whole_test_set=whole_test_set,
+    model, encoder_dim, hook_dim = netavlad.get_netavlad_model(opt=opt, train_set=dataset_tuple[0],
+                                                               whole_test_set=dataset_tuple[3],
                                                                middleAttention=False)
     isParallel = False
     if opt.nGPU > 1 and torch.cuda.device_count() > 1:
@@ -174,7 +177,7 @@ if __name__ == "__main__":
         model, start_epoch, best_metric = loadCkpt.loadckpt(opt.ckpt.lower(), opt.resume, opt.start_epoch,
                                                             opt.mode.lower(), opt, opt.nGPU, device, model,
                                                             opt.withAttention)
-    if not opt.resume:
+    else:
         model = model.to(device)
     rv.set_model(model, encoder_dim, hook_dim)
 
@@ -192,12 +195,12 @@ if __name__ == "__main__":
                 # print(list(model.attention.parameters()))
                 attention_train_params = filter(lambda p: p.requires_grad, model.attention.parameters())
                 base_params = filter(lambda p: p.requires_grad, model.parameters())
-                base_train_params = list(set(base_params)^set(attention_train_params))
+                base_train_params = list(set(base_params) ^ set(attention_train_params))
                 optimizer = optim.SGD([
                     {'params': base_train_params, 'lr': opt.lr, 'momentum': opt.momentum,
                      'weight_decay': opt.weightDecay},
                     {'params': attention_train_params, 'lr': opt.lr*10, 'momentum': opt.momentum,
-                     'weight_decay': opt.weightDecay},
+                     'weight_decay': opt.weightDecay}
                 ])
             else:
                 optimizer = optim.SGD(filter(lambda p: p.requires_grad, model.parameters()),
@@ -215,14 +218,14 @@ if __name__ == "__main__":
     if opt.mode.lower() == 'test':
         print('===> Running evaluation step')
         if opt.saveDecs:
-            GenerateDecs.generate(rv, opt, '/localresearch/PreciseLocalization/Dataset/YuQuanMultimodal/Gate-T3/')
+            GenerateDecs.generate(rv, opt, '/localresearch/PreciseLocalization/Dataset/YuQuanMultimodal/T3-Lib-res-a/')
         else:
             epoch = 1
             recalls = TestScript.test(rv, opt, epoch, write_tboard=False)
 
     elif opt.mode.lower() == 'cluster':
         print('===> Calculating descriptors and clusters')
-        get_clusters(whole_train_set)
+        get_clusters(dataset_tuple[1])
 
     elif opt.mode.lower() == 'train':
         print('===> Training model')

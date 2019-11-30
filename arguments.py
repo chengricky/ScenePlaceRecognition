@@ -39,7 +39,7 @@ parser.add_argument('--patience', type=int, default=5, help='Patience for early 
 parser.add_argument('--dataset', type=str, default='pittsburgh',
                     help='Dataset to use', choices=['pittsburgh', 'tokyo247', 'highway', 'GB', 'multimodal'])
 parser.add_argument('--arch', type=str, default='resnet18',
-                    help='basenetwork to use', choices=['vgg16', 'alexnet', 'resnet18', 'resnet34', 'resnet50'])
+                    help='basenetwork to use', choices=['vgg16', 'alexnet', 'resnet18', 'resnet34', 'resnet50', 'mobilenet'])
 parser.add_argument('--pooling', type=str, default='netvlad', help='type of pooling to use',
                     choices=['netvlad', 'max', 'avg'])
 parser.add_argument('--num_clusters', type=int, default=64, help='Number of NetVlad clusters. Default=64')
@@ -62,8 +62,6 @@ def get_args():
                    'margin', 'seed', 'patience']
     if opt.resume:
         opt_loaded = read_arguments(opt, parser, restore_var)
-
-
         return opt_loaded
     else:
         return opt
@@ -90,4 +88,4 @@ def read_arguments(opt, parser_, restore_var):
             train_flags = [x for x in list(sum(stored_flags.items(), tuple())) if len(x) > 0]
             print('Restored flags:', train_flags)
             opt_load = parser_.parse_args(train_flags, namespace=opt)
-    return opt_load
+            return opt_load
