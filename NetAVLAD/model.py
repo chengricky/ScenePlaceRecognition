@@ -99,7 +99,7 @@ def baseMobileNet(type=2, numTrain=5):
     state_dict = {str.replace(k, 'module.', ''): v for k, v in checkpoint['state_dict'].items()}  # 去掉module.字样
     modelMobileNet.load_state_dict(state_dict)
 
-    layers = list(list(modelMobileNet.children())[0].children())
+    layers = list(list(modelMobileNet.children())[0].children())[:-1]
     for l in layers[:-1*numTrain]:
         for p in l.parameters():
             p.requires_grad = False
@@ -149,7 +149,7 @@ def get_netavlad_model(opt, train_set, whole_test_set, middleAttention):
         hook_layer = 2
         layers = baseResNet(type=50, numTrain=opt.numTrain)
     elif arch == 'mobilenet':
-        encoder_dim = 1280
+        encoder_dim = 320
         hook_layer = 2
         layers = baseMobileNet(type=2, numTrain=opt.numTrain)
     else:
