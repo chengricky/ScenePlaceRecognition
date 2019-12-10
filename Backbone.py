@@ -26,8 +26,12 @@ class L2Norm(nn.Module):
         return F.normalize(input, p=2, dim=self.dim)
 
 
+def get_alexnet(pretrained):
+    return models.alexnet(pretrained=pretrained)
+
+
 def baseAlexNet(pretrained=True, numTrain=1):
-    encoder = models.alexnet(pretrained=pretrained)
+    encoder = get_alexnet(pretrained)
     # capture only features and remove last relu and maxpool
     layers = list(encoder.features.children())[:-2]
     if pretrained:
@@ -38,10 +42,15 @@ def baseAlexNet(pretrained=True, numTrain=1):
     return layers
 
 
-def baseVGG16(pretrained=False, numTrain=5):
+def get_vgg16(pretrained):
     encoder = models.vgg16(pretrained=False)
     if pretrained is True:
         encoder.load_state_dict(torch.load('vgg16-397923af.pth'))
+    return encoder
+
+
+def baseVGG16(pretrained=False, numTrain=5):
+    encoder = get_vgg16(pretrained)
     # capture only feature part and remove last relu and maxpool
     layers = list(encoder.features.children())[:-2]
     # print(len(layers))
@@ -60,22 +69,29 @@ def baseVGG16(pretrained=False, numTrain=5):
     return layers
 
 
-def baseResNet(type=50, numTrain=2):
-    # loading resnet18 of trained on places365 as basenet
+def get_resnet(type):
+    """
+    loading resnet18 of trained on places365 as basenet
+    """
     from Place365 import wideresnet
     if type == 18:
         model_file = 'Place365/wideresnet18_places365.pth.tar'
-        modelResNet = wideresnet.resnet18(num_classes=365)
+        model_res_net = wideresnet.resnet18(num_classes=365)
     elif type == 34:
         model_file = 'Place365/resnet34-333f7ec4.pth'# Pretrained on ImageNet
-        modelResNet = wideresnet.resnet34()
+        model_res_net = wideresnet.resnet34()
     elif type == 50:
         model_file = 'Place365/resnet50_places365.pth.tar'
-        modelResNet = wideresnet.resnet50(num_classes=365)
+        model_res_net = wideresnet.resnet50(num_classes=365)
     else:
         raise Exception('Unknown ResNet Type')
+    return model_res_net, model_file
+
+
+def baseResNet(type=50, numTrain=2):
+    modelResNet, model_file = get_resnet(type)
     # load object saved with torch.save() from a file, with funtion specifiying how to remap storage locations in the parameter list
-    checkpoint = torch.load(model_file, map_location=lambda storage, loc: storage)  # gpu->cpu, why?!
+    checkpoint = torch.load(model_file, map_location=lambda storage, loc: storage)
     if type == 34:
         modelResNet.load_state_dict(checkpoint)
     else:
@@ -91,20 +107,32 @@ def baseResNet(type=50, numTrain=2):
     return layers
 
 
-def baseMobileNet(type=2, numTrain=5):
+def get_mobilenet():
     import torchvision.models.mobilenet as mobilenet
     model_file = 'Place365/mobilenet_v2_best.pth.tar'
-    modelMobileNet = mobilenet.MobileNetV2(num_classes=365)
+    model_mobile_net = mobilenet.MobileNetV2(num_classes=365)
     checkpoint = torch.load(model_file, map_location=lambda storage, loc: storage)
     state_dict = {str.replace(k, 'module.', ''): v for k, v in checkpoint['state_dict'].items()}  # 去掉module.字样
-    modelMobileNet.load_state_dict(state_dict)
+    model_mobile_net.load_state_dict(state_dict)
+    return model_mobile_net
 
+
+def baseMobileNet(type=2, numTrain=5):
+    modelMobileNet = get_mobilenet()
     layers = list(list(modelMobileNet.children())[0].children())[:-1]
     for l in layers[:-1*numTrain]:
         for p in l.parameters():
             p.requires_grad = False
     return layers
 
+def get_shufflenet():
+    import torchvision.models.shufflenetv2 as shufflenet
+    model_file = 'Place365/shufflenet_v2_best.pth.tar'
+    model_shuffle_net = shufflenet.shufflenet_v2_x1_0(num_classes=365)
+    checkpoint = torch.load(model_file, map_location=lambda storage, loc: storage)
+    state_dict = {str.replace(k, 'module.', ''): v for k, v in checkpoint['state_dict'].items()}  # 去掉module.字样
+    model_shuffle_net.load_state_dict(state_dict)
+    return model_shuffle_net
 
 hook_features = []
 
