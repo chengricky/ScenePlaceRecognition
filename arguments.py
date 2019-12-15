@@ -39,7 +39,8 @@ parser.add_argument('--patience', type=int, default=5, help='Patience for early 
 parser.add_argument('--dataset', type=str, default='pittsburgh',
                     help='Dataset to use', choices=['pittsburgh', 'tokyo247', 'highway', 'GB', 'multimodal'])
 parser.add_argument('--arch', type=str, default='resnet18',
-                    help='basenetwork to use', choices=['vgg16', 'alexnet', 'resnet18', 'resnet34', 'resnet50', 'mobilenet'])
+                    help='basenetwork to use', choices=['vgg16', 'alexnet', 'resnet18', 'resnet34', 'resnet50',
+                                                        'mobilenet2', 'shufflenet2'])
 parser.add_argument('--pooling', type=str, default='netvlad', help='type of pooling to use',
                     choices=['netvlad', 'max', 'avg'])
 parser.add_argument('--num_clusters', type=int, default=64, help='Number of NetVlad clusters. Default=64')
@@ -50,7 +51,6 @@ parser.add_argument('--fromscratch', action='store_true', help='Train from scrat
 parser.add_argument('--numTrain', type=int, default=2, help='the number of trained layers of basenet')
 parser.add_argument('--withAttention', action='store_true', help='Whether with the attention module.')
 parser.add_argument('--remain', type=float, default=0.5, help='The remained ratio of feature map.')
-parser.add_argument('--vladv2', action='store_true', help='whether to use VLADv2.')
 parser.add_argument('--reduction', action='store_true', help='whether to perform PCA dimension reduction.')
 
 

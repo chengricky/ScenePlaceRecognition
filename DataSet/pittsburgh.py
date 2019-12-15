@@ -69,6 +69,11 @@ def input_transform():
     ])
 
 
+def get_random_training_set(rand_num=10000):
+    structFile = join(struct_dir, 'pitts30k_train.mat')
+    return RandomDatasetFromStruct(structFile, input_transform=input_transform(), rand_num=rand_num)
+
+
 def get_whole_training_set(onlyDB=False):
     structFile = join(struct_dir, 'pitts30k_train.mat')
     return WholeDatasetFromStruct(structFile, input_transform=input_transform(), onlyDB=onlyDB)
@@ -152,6 +157,34 @@ def parse_dbStruct(path):
                     posDistSqThr, nonTrivPosDistSqThr)
 
 
+class RandomDatasetFromStruct(data.Dataset):
+    def __init__(self, structFile, input_transform=None, rand_num=10000):
+        super().__init__()
+
+        self.input_transform = input_transform
+
+        self.dbStruct = parse_dbStruct(structFile)
+        self.images = [join(root_dir, dbIm) for dbIm in self.dbStruct.dbImage]
+        self.images += [join(queries_dir, qIm) for qIm in self.dbStruct.qImage]
+        num = self.dbStruct.numDb + self.dbStruct.numQ
+        idx = np.random.random_integers(0, num-1, rand_num)
+        self.images = np.array(self.images)[idx]
+
+        self.whichSet = self.dbStruct.whichSet
+        self.dataset = self.dbStruct.dataset
+
+    def __getitem__(self, index):
+        img = Image.open(self.images[index])
+
+        if self.input_transform:
+            img = self.input_transform(img)
+
+        return img, index
+
+    def __len__(self):
+        return len(self.images)
+
+
 class WholeDatasetFromStruct(data.Dataset):
     def __init__(self, structFile, input_transform=None, onlyDB=False):
         super().__init__()
@@ -187,8 +220,6 @@ class WholeDatasetFromStruct(data.Dataset):
 
     def __len__(self):
         return len(self.images)
-
-
 
     def get_positives(self):
         # positives for evaluation are those within trivial threshold range

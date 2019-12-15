@@ -1,6 +1,6 @@
-# This file defines the CNN combined NetAVLAD module and scene catagory utility
+# This file defines the CNN combined UnifiedModel module and scene catagory utility
 
-# loading resnet18 of trained with NetAVLAD as the basenet
+# loading resnet18 of trained with UnifiedModel as the basenet
 import torch.nn as nn
 import math
 

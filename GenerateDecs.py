@@ -2,7 +2,7 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 from os import path
-from NetAVLAD import model as mdl
+from UnifiedModel import Backbone as mdl
 
 
 def generate(rv, opt, path_dir):

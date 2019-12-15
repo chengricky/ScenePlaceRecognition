@@ -29,7 +29,7 @@ import TrainScript
 import arguments
 import loadCkpt
 from DataSet import loadDataset
-from NetAVLAD import model as netavlad
+from UnifiedModel import Backbone as netavlad
 
 
 def get_clusters(cluster_set):
@@ -38,10 +38,8 @@ def get_clusters(cluster_set):
     nIm = ceil(nDescriptors / nPerImage)
 
     sampler = SubsetRandomSampler(np.random.choice(len(cluster_set), nIm, replace=False))
-    data_loader = DataLoader(dataset=cluster_set,
-                             num_workers=opt.threads, batch_size=opt.cacheBatchSize, shuffle=False,
-                             pin_memory=True,
-                             sampler=sampler)
+    data_loader = DataLoader(dataset=cluster_set, num_workers=opt.threads, batch_size=opt.cacheBatchSize,
+                             shuffle=False, pin_memory=True, sampler=sampler)
 
     if not exists(join(opt.dataPath, 'centroids')):
         makedirs(join(opt.dataPath, 'centroids'))
@@ -52,9 +50,7 @@ def get_clusters(cluster_set):
         with torch.no_grad():
             model.eval()
             print('====> Extracting Descriptors')
-            dbFeat = h5.create_dataset("descriptors",
-                                       [nDescriptors, encoder_dim],
-                                       dtype=np.float32)  # float32
+            dbFeat = h5.create_dataset("descriptors", [nDescriptors, encoder_dim], dtype=np.float32)
 
             for iteration, (input, indices) in enumerate(data_loader, 1):
                 input = input.to(device)
@@ -159,8 +155,7 @@ if __name__ == "__main__":
 
     print('===> Building model')
     model, encoder_dim, hook_dim = netavlad.get_netavlad_model(opt=opt, train_set=dataset_tuple[0],
-                                                               whole_test_set=dataset_tuple[3],
-                                                               middleAttention=False)
+                                                               whole_test_set=dataset_tuple[3])
     isParallel = False
     if opt.nGPU > 1 and torch.cuda.device_count() > 1:
         print('Available GPU num = ', torch.cuda.device_count())
