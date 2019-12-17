@@ -4,9 +4,21 @@ from torch.utils.data import DataLoader
 import faiss
 
 
+def loadWPCA(reduced_dim):
+    """
+    Apply Dimension Reduction (PCA+Whitening)
+    """
+    wpca = torch.load('pca'+str(reduced_dim)+'.pth')
+    from UnifiedModel.Backbone import L2Norm
+    l2 = L2Norm()
+    return torch.nn.Sequential(wpca, l2)
+
+
 def test(rv, opt, epoch=0, write_tboard=False):
+    # wpca = loadWPCA(5120).to(rv.device)
+
     # TODO what if features dont fit in memory?
-    test_data_loader = DataLoader(dataset=rv.whole_test_set, #num_workers=opt.threads,
+    test_data_loader = DataLoader(dataset=rv.whole_test_set, num_workers=opt.threads,
                                   batch_size=opt.cacheBatchSize, shuffle=False,
                                   pin_memory=True)
 
@@ -14,7 +26,10 @@ def test(rv, opt, epoch=0, write_tboard=False):
     with torch.no_grad():
         print('====> Extracting Features')
         pool_size = rv.encoder_dim
-        if opt.pooling.lower() == 'netvlad': pool_size *= opt.num_clusters
+        if opt.pooling.lower() == 'netvlad':
+            pool_size *= opt.num_clusters
+        print(pool_size)
+        # pool_size = 5120
         dbFeat = np.empty((len(rv.whole_test_set), pool_size))
 
         for iteration, (input, indices) in enumerate(test_data_loader, 1):
@@ -29,6 +44,7 @@ def test(rv, opt, epoch=0, write_tboard=False):
                 vlad_encoding = rv.model.pool(image_encoding)
                 del image_encoding
 
+            # vlad_encoding = wpca(vlad_encoding.unsqueeze(-1).unsqueeze(-1)).squeeze(-1).squeeze(-1)
             dbFeat[indices.detach().numpy(), :] = vlad_encoding.detach().cpu().numpy()
             if iteration % 50 == 0 or len(test_data_loader) <= 10:
                 print("==> Batch ({}/{})".format(iteration, len(test_data_loader)), flush=True)
@@ -60,7 +76,12 @@ def test(rv, opt, epoch=0, write_tboard=False):
     if opt.dataset.lower() == 'tokyo247':
         n_values = [10, 50, 100, 200]
 
+    import time
+    since=time.time()
     _, predictions = index_flat.search(qFeat, max(n_values))
+    time_elapsed=time.time()-since
+    print('serching time per query (ms)', 1000*time_elapsed/rv.whole_test_set.dbStruct.numQ)
+
     predictionNew = []
     if opt.dataset.lower() == 'tokyo247':
         for idx, pred in enumerate(predictions):

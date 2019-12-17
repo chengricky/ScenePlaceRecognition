@@ -13,13 +13,13 @@ if not exists(root_dir):
     raise FileNotFoundError('root_dir is hardcoded, please adjust to point to West Lake dataset')
 
 # the list of database folder (images)
-dbFolder = join(root_dir, 'westlake-1-database')
-qFolder = join(root_dir, 'westlake-1-query')
+dbFolder = join(root_dir, 'westlake-5-database')
+qFolder = join(root_dir, 'westlake-5-query')
 
 
 def input_transform():
     return transforms.Compose([
-        transforms.Resize((256, 256)),
+        transforms.Resize(224),
         transforms.CenterCrop(224),
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406],

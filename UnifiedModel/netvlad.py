@@ -15,7 +15,7 @@ import faiss
 
 class NetVLAD(nn.Module):
     """NetVLAD layer implementation"""
-    def __init__(self, num_clusters=64, dim=128, normalize_input=True, loop=False):
+    def __init__(self, num_clusters=64, dim=128, normalize_input=True, loop=True):
         """
         Args:
             num_clusters : int

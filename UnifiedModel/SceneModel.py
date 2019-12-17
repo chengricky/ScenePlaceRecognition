@@ -142,6 +142,7 @@ class UnifiedSceneNetwork(nn.Module):
             if self.wpca:
                 x2 = self.wpca(x2.unsqueeze(-1).unsqueeze(-1))
                 x2 = x2.squeeze(-1).squeeze(-1)
+                x2 = nn.functional.normalize(x2, p=2)
 
         return x1, x2
 

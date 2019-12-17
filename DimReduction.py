@@ -16,29 +16,27 @@ import warnings
 import csv
 
 parser = argparse.ArgumentParser(description='ScenePlaceRecognitionTest')
-parser.add_argument('--cacheBatchSize', type=int, default=32, help='Batch size for caching and testing')
+parser.add_argument('--cacheBatchSize', type=int, default=96, help='Batch size for caching and testing')
 parser.add_argument('--nocuda', action='store_true', help='Dont use cuda')
 parser.add_argument('--threads', type=int, default=4, help='Number of threads for each data loader to use')
 parser.add_argument('--seed', type=int, default=123, help='Random seed to use.')
 parser.add_argument('--dataPath', type=str, default='data/', help='Path for centroid data.')
 parser.add_argument('--cachePath', type=str, default='/tmp/', help='Path to save cache to.')
-parser.add_argument('--resume', type=str, default='/home/ricky/ScenePlaceRecognition',
+parser.add_argument('--resume', type=str, default='checkpoints_mbnet_pitts30_n11',
                     help='Path to load checkpoint from, for resuming training or testing.')
 parser.add_argument('--ckpt', type=str, default='best',
                     help='Resume from latest or best checkpoint.', choices=['latest', 'best'])
 parser.add_argument('--dataset', type=str, default='Pittsburgh', help='Dataset to use',
                     choices=['westlake', 'yuquan', 'Pittsburgh'])
-parser.add_argument('-a', '--arch', type=str, default='resnet', help='the backbone network',
+parser.add_argument('-a', '--arch', type=str, default='mobilenet_v2', help='the backbone network',
                     choices=['resnet18', 'mobilenet_v2', 'shufflenet_v2'])
-# parser.add_argument('--pooling', type=str, default='netvlad', help='type of pooling to use',
-#                     choices=['netvlad', 'max', 'avg'])
-# parser.add_argument('--num_clusters', type=int, default=64, help='Number of NetVlad clusters. Default=64')
-# parser.add_argument('--attention', action='store_true', help='Whether with the attention module.')
-parser.add_argument('--netVLADtrainNum', type=int, default=2, help='Number of trained blocks in the backbone.')
+parser.add_argument('--netVLADtrainNum', type=int, default=11, help='Number of trained blocks in the backbone.')
 parser.add_argument('--savePath', type=str, default='', help='where to save descriptors and classes.')
+parser.add_argument('--reducedDim', type=int, default=512, help='the compressed dimension number.')
+parser.add_argument('--randNum', type=int, default=10000, help='how many samples are used in PCA.')
 
 
-def test(data_set, reduced_dim=4096, whiten=True, rand_num=10000):
+def test(data_set, reduced_dim=4096, whiten=True):
     data_loader = DataLoader(dataset=data_set, num_workers=opt.threads,
                              batch_size=opt.cacheBatchSize, shuffle=False, pin_memory=cuda)
     if unified_model.pooling.lower() == 'netvlad':
@@ -76,7 +74,7 @@ def test(data_set, reduced_dim=4096, whiten=True, rand_num=10000):
     conv.weight = nn.Parameter(U.t().unsqueeze(-1).unsqueeze(-1))
     conv.bias = nn.Parameter(-Utmu.squeeze(-1))
 
-    torch.save(conv, 'pca.pth')
+    torch.save(conv, 'pca'+str(reduced_dim)+'.pth')
 
 
 if __name__ == "__main__":
@@ -104,7 +102,7 @@ if __name__ == "__main__":
     else:
         raise Exception('Unknown dataset')
     print('===> Loading dataset(s)')
-    random_train_set = dataset.get_random_training_set(rand_num=1000)
+    random_train_set = dataset.get_random_training_set(rand_num=opt.randNum)
     # build Unified network architecture
     print('===> Building model')
     unified_model = SceneModel.UnifiedSceneNetwork(opt.arch, opt.netVLADtrainNum, num_clusters=64,
@@ -112,13 +110,13 @@ if __name__ == "__main__":
 
     # load the paramters of the UnifiedModel branch
     if opt.ckpt.lower() == 'latest':
-        resume_ckpt = join(opt.resume, 'checkpoints_mbnet_pitts30_n11', 'checkpoint.pth.tar')
+        resume_ckpt = join(opt.resume, 'checkpoint.pth.tar')
     elif opt.ckpt.lower() == 'best':
-        resume_ckpt = join(opt.resume, 'checkpoints_mbnet_pitts30_n11', 'model_best.pth.tar')
+        resume_ckpt = join(opt.resume, 'model_best.pth.tar')
     unified_model.load_branch2_params(resume_ckpt)
 
     # execute test procedures
     print('===> Running evaluation step')
     unified_model = unified_model.to(device)
     unified_model.eval()
-    test(random_train_set, reduced_dim=512)
+    test(random_train_set, reduced_dim=opt.reducedDim)
