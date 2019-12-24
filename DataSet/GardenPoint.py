@@ -6,7 +6,6 @@ import torchvision.transforms as transforms
 import torch.utils.data as data
 from os.path import join, exists
 import os
-import numpy as np
 from PIL import Image
 
 root_dir = '/localresearch/VisualLocalization/Dataset/dataset GardensPointWalking/'
@@ -65,17 +64,6 @@ class DatasetFromStruct(data.Dataset):
     def __len__(self):
         return len(self.images)
 
-    # def get_positives(self):
-    #     # positives for evaluation are those within trivial threshold range
-    #     # fit NN to find them, search by radius
-    #     if self.positives is None:
-    #         self.positives = np.ndarray(())
-    #         knn = NearestNeighbors(n_jobs=-1)
-    #         knn.fit(self.dbStruct.utmDb)
-    #
-    #         self.distances, self.positives = knn.radius_neighbors(self.dbStruct.utmQ,
-    #                                                               radius=self.dbStruct.posDistThr)
-    #
-    #     return self.positives
+
 
 

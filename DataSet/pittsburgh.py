@@ -1,17 +1,11 @@
 import torch
 import torchvision.transforms as transforms
 import torch.utils.data as data
-
 from os.path import join, exists, dirname, abspath
 from scipy.io import loadmat
-import numpy as np
-from random import randint, random
 from collections import namedtuple
-from PIL import Image
-
 from sklearn.neighbors import NearestNeighbors
 import h5py
-
 from DataSet.data_augment import *
 from torchvision.transforms import ColorJitter
 import yaml

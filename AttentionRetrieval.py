@@ -12,7 +12,6 @@ from datetime import datetime
 from math import ceil
 from os import makedirs
 from os.path import join, exists
-
 import faiss
 import h5py
 import numpy as np
@@ -22,7 +21,6 @@ import torch.optim as optim
 from tensorboardX import SummaryWriter
 from torch.utils.data import DataLoader
 from torch.utils.data.sampler import SubsetRandomSampler
-
 import GenerateDecs
 import TestScript
 import TrainScript

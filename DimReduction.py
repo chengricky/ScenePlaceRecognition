@@ -5,15 +5,13 @@ Test unified network with scene classification and place recognition
 from __future__ import print_function
 import argparse
 import random
-from os.path import join, exists
-from os import mkdir
+from os.path import join
 import torch
 from torch.utils.data import DataLoader
 from torch import nn
 import numpy as np
 from UnifiedModel import SceneModel
 import warnings
-import csv
 
 parser = argparse.ArgumentParser(description='ScenePlaceRecognitionTest')
 parser.add_argument('--cacheBatchSize', type=int, default=96, help='Batch size for caching and testing')
