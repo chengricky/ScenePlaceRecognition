@@ -11,7 +11,6 @@ import h5py
 import numpy as np
 from os.path import join, exists
 from UnifiedModel import netvlad
-from UnifiedModel import attention as delfModel
 
 
 class Flatten(nn.Module):
@@ -167,7 +166,6 @@ def get_netavlad_model(opt, train_set, whole_test_set):
     pooling = opt.pooling.lower()
     resume = opt.resume
     num_clusters = opt.num_clusters
-    remain = opt.remain
 
     hook_dim = 0
 
@@ -214,10 +212,6 @@ def get_netavlad_model(opt, train_set, whole_test_set):
     model = nn.Module()
     model.add_module('encoder', encoder)
 
-    if opt.withAttention:
-        delf = delfModel.DELF(numc_featmap=encoder_dim, remain=remain)
-        delf.init()
-        model.add_module('attention', delf)
 
     # 初始化model中的pooling模块
     if mode != 'cluster':
