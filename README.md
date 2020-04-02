@@ -3,9 +3,8 @@
 The code achieves the unified network with two branches for scene classification and scene description (NetVLAD). The two branches of the network are trained separately on the classification dataset (Places-365) and the description dataset (Pittsburgh). The trained networks are combined together to test on multiple real-world datasets.
 
 If you use this code, please refer to the paper:
-```
-Unifying Visual Localization and Scene Recognition for Assistive Navigation
-```
+[Unifying Visual Localization and Scene Recognition for Assistive Navigation](http://doi.org/10.1109/ACCESS.2020.2984718)
+
 
 The directory structure of this repository is:
 ```
